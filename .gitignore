@@ -1,0 +1,33 @@
+# env
+server/.env
+app/.env.local
+.env
+.env.*.local
+
+# deps
+node_modules/
+
+# builds
+dist/
+build/
+.vite/
+.next/
+out/
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# uploads / runtime
+server/uploads/
+
+# Local Netlify folder
+.netlify
+.env*
+.vercel/

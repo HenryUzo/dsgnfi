@@ -1,0 +1,85 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum CmsStatus {
+  DRAFT
+  PUBLISHED
+}
+
+model AdminUser {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+}
+
+model CmsSection {
+  id            String    @id @default(uuid()) @db.Uuid
+  page          String
+  section       String
+  status        CmsStatus @default(DRAFT)
+  draftData     Json      @default(dbgenerated("'{}'::jsonb"))
+  publishedData Json      @default(dbgenerated("'{}'::jsonb"))
+  updatedAt     DateTime  @updatedAt
+  publishedAt   DateTime?
+
+  @@unique([page, section])
+  @@index([page])
+}
+
+model WorkPageMeta {
+  key               String    @id @default("work")
+  titleDraft        String    @default("Our Work")
+  subtitleDraft     String    @default("")
+  titlePublished    String    @default("Our Work")
+  subtitlePublished String    @default("")
+  status            CmsStatus @default(DRAFT)
+  publishedAt       DateTime?
+  updatedAt         DateTime  @updatedAt
+}
+
+model WorkTag {
+  id        String           @id @default(uuid()) @db.Uuid
+  name      String
+  slug      String           @unique
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  projects  WorkProjectTag[]
+}
+
+model WorkProject {
+  id                 String           @id @default(uuid()) @db.Uuid
+  templateId         String
+  titleDraft         String
+  slugDraft          String           @unique
+  excerptDraft       String
+  coverImageDraft    String
+  draftContent       Json             @default(dbgenerated("'{}'::jsonb"))
+  titlePublished     String?
+  slugPublished      String?          @unique
+  excerptPublished   String?
+  coverImagePublished String?
+  publishedContent   Json             @default(dbgenerated("'{}'::jsonb"))
+  status             CmsStatus        @default(DRAFT)
+  publishedAt        DateTime?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  tags               WorkProjectTag[]
+
+  @@index([status])
+}
+
+model WorkProjectTag {
+  projectId String      @db.Uuid
+  tagId     String      @db.Uuid
+  project   WorkProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tag       WorkTag     @relation(fields: [tagId], references: [id], onDelete: Restrict)
+
+  @@id([projectId, tagId])
+  @@index([tagId])
+}
