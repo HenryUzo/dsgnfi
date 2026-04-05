@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 
 import { prisma } from "../db/prisma";
 import { requireAdmin } from "../middleware/requireAdmin";
+import { withAdminSiteContext } from "../middleware/withAdminSiteContext";
 
 const router = Router();
 
@@ -43,9 +44,17 @@ const publishSchema = z.object({
   section: z.string().min(1),
 });
 
-router.use(requireAdmin);
+router.use(requireAdmin, withAdminSiteContext);
 
 router.get("/section", async (req, res) => {
+  const siteId = req.context?.siteId;
+  if (!siteId) {
+    return res.status(500).json({
+      ok: false,
+      error: { message: "Missing admin site context." },
+    });
+  }
+
   const parsed = querySchema.safeParse({
     page: req.query.page,
     section: req.query.section,
@@ -61,7 +70,7 @@ router.get("/section", async (req, res) => {
   const { page, section } = parsed.data;
 
   const record = await prisma.cmsSection.findUnique({
-    where: { page_section: { page, section } },
+    where: { siteId_page_section: { siteId, page, section } },
   });
 
   if (!record) {
@@ -88,6 +97,14 @@ router.get("/section", async (req, res) => {
 });
 
 router.put("/section", async (req, res) => {
+  const siteId = req.context?.siteId;
+  if (!siteId) {
+    return res.status(500).json({
+      ok: false,
+      error: { message: "Missing admin site context." },
+    });
+  }
+
   const parsed = draftSchema.safeParse(req.body);
 
   if (!parsed.success) {
@@ -100,12 +117,13 @@ router.put("/section", async (req, res) => {
   const { page, section, draftData } = parsed.data;
 
   await prisma.cmsSection.upsert({
-    where: { page_section: { page, section } },
+    where: { siteId_page_section: { siteId, page, section } },
     update: {
       draftData,
       status: "DRAFT",
     },
     create: {
+      siteId,
       page,
       section,
       draftData,
@@ -118,6 +136,14 @@ router.put("/section", async (req, res) => {
 });
 
 router.post("/publish", async (req, res) => {
+  const siteId = req.context?.siteId;
+  if (!siteId) {
+    return res.status(500).json({
+      ok: false,
+      error: { message: "Missing admin site context." },
+    });
+  }
+
   const parsed = publishSchema.safeParse(req.body);
 
   if (!parsed.success) {
@@ -130,7 +156,7 @@ router.post("/publish", async (req, res) => {
   const { page, section } = parsed.data;
 
   const record = await prisma.cmsSection.findUnique({
-    where: { page_section: { page, section } },
+    where: { siteId_page_section: { siteId, page, section } },
   });
 
   if (!record) {
@@ -144,7 +170,7 @@ router.post("/publish", async (req, res) => {
   const draft = (record.draftData ?? {}) as Prisma.InputJsonObject;
 
   await prisma.cmsSection.update({
-    where: { page_section: { page, section } },
+    where: { siteId_page_section: { siteId, page, section } },
     data: {
       publishedData: draft,
       status: "PUBLISHED",

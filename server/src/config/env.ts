@@ -1,4 +1,12 @@
-﻿import { z } from "zod";
+import { z } from "zod";
+
+const boolFromString = z
+  .union([z.boolean(), z.string()])
+  .transform((value) => {
+    if (typeof value === "boolean") return value;
+    const normalized = value.trim().toLowerCase();
+    return normalized === "true" || normalized === "1" || normalized === "yes";
+  });
 
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
@@ -10,6 +18,11 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1).optional(),
 
   JWT_SECRET: z.string().min(1),
+
+  APP_BASE_DOMAIN: z.string().min(1).optional(),
+  DEFAULT_TENANT_SLUG: z.string().min(1).default("dsgnfi"),
+  DEFAULT_SITE_SLUG: z.string().min(1).default("main"),
+  ALLOW_DEV_SITE_QUERY_OVERRIDE: boolFromString.default(true),
 });
 
 const parsedEnv = envSchema.parse(process.env);

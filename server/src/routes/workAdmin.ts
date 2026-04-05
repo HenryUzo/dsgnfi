@@ -1,9 +1,10 @@
 import { Prisma } from "@prisma/client";
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 
 import { prisma } from "../db/prisma";
 import { requireAdmin } from "../middleware/requireAdmin";
+import { withAdminSiteContext } from "../middleware/withAdminSiteContext";
 
 const router = Router();
 
@@ -85,13 +86,29 @@ function toAdminProject(project: AdminProjectRecord) {
   };
 }
 
-router.use(requireAdmin);
+function getSiteId(req: Request, res: Response): string | null {
+  const siteId = req.context?.siteId;
+  if (!siteId) {
+    res.status(500).json({
+      ok: false,
+      error: { message: "Missing admin site context." },
+    });
+    return null;
+  }
 
-router.get("/meta", async (_req, res) => {
+  return siteId;
+}
+
+router.use(requireAdmin, withAdminSiteContext);
+
+router.get("/meta", async (req, res) => {
+  const siteId = getSiteId(req, res);
+  if (!siteId) return;
+
   const meta = await prisma.workPageMeta.upsert({
-    where: { key: "work" },
+    where: { siteId_key: { siteId, key: "work" } },
     update: {},
-    create: { key: "work" },
+    create: { siteId, key: "work" },
   });
 
   return res.json({
@@ -103,6 +120,9 @@ router.get("/meta", async (_req, res) => {
 });
 
 router.put("/meta", async (req, res) => {
+  const siteId = getSiteId(req, res);
+  if (!siteId) return;
+
   const parsed = metaDraftSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({
@@ -112,13 +132,14 @@ router.put("/meta", async (req, res) => {
   }
 
   await prisma.workPageMeta.upsert({
-    where: { key: "work" },
+    where: { siteId_key: { siteId, key: "work" } },
     update: {
       titleDraft: parsed.data.title,
       subtitleDraft: parsed.data.subtitle,
       status: "DRAFT",
     },
     create: {
+      siteId,
       key: "work",
       titleDraft: parsed.data.title,
       subtitleDraft: parsed.data.subtitle,
@@ -131,15 +152,18 @@ router.put("/meta", async (req, res) => {
   return res.json({ ok: true });
 });
 
-router.post("/meta/publish", async (_req, res) => {
+router.post("/meta/publish", async (req, res) => {
+  const siteId = getSiteId(req, res);
+  if (!siteId) return;
+
   const meta = await prisma.workPageMeta.upsert({
-    where: { key: "work" },
+    where: { siteId_key: { siteId, key: "work" } },
     update: {},
-    create: { key: "work" },
+    create: { siteId, key: "work" },
   });
 
   await prisma.workPageMeta.update({
-    where: { key: "work" },
+    where: { siteId_key: { siteId, key: "work" } },
     data: {
       titlePublished: meta.titleDraft,
       subtitlePublished: meta.subtitleDraft,
@@ -151,14 +175,21 @@ router.post("/meta/publish", async (_req, res) => {
   return res.json({ ok: true });
 });
 
-router.get("/tags", async (_req, res) => {
+router.get("/tags", async (req, res) => {
+  const siteId = getSiteId(req, res);
+  if (!siteId) return;
+
   const tags = await prisma.workTag.findMany({
+    where: { siteId },
     orderBy: { createdAt: "asc" },
   });
   return res.json({ tags });
 });
 
 router.post("/tags", async (req, res) => {
+  const siteId = getSiteId(req, res);
+  if (!siteId) return;
+
   const parsed = tagCreateSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({
@@ -168,7 +199,7 @@ router.post("/tags", async (req, res) => {
   }
 
   try {
-    const tag = await prisma.workTag.create({ data: parsed.data });
+    const tag = await prisma.workTag.create({ data: { siteId, ...parsed.data } });
     return res.status(201).json({ tag });
   } catch (err) {
     if (isUniqueError(err)) {
@@ -182,6 +213,9 @@ router.post("/tags", async (req, res) => {
 });
 
 router.patch("/tags/:id", async (req, res) => {
+  const siteId = getSiteId(req, res);
+  if (!siteId) return;
+
   const parsedId = paramsIdSchema.safeParse(req.params);
   if (!parsedId.success) {
     return res.status(400).json({ ok: false, error: { message: "Invalid tag id." } });
@@ -193,6 +227,14 @@ router.patch("/tags/:id", async (req, res) => {
       ok: false,
       error: { message: parsed.error.issues[0]?.message ?? "Invalid payload." },
     });
+  }
+
+  const existingTag = await prisma.workTag.findFirst({
+    where: { id: parsedId.data.id, siteId },
+    select: { id: true },
+  });
+  if (!existingTag) {
+    return res.status(404).json({ ok: false, error: { message: "Tag not found." } });
   }
 
   try {
@@ -208,24 +250,32 @@ router.patch("/tags/:id", async (req, res) => {
         error: { message: "Tag slug already exists. Choose a different slug." },
       });
     }
-    if (
-      err instanceof Prisma.PrismaClientKnownRequestError &&
-      err.code === "P2025"
-    ) {
-      return res.status(404).json({ ok: false, error: { message: "Tag not found." } });
-    }
     throw err;
   }
 });
 
 router.delete("/tags/:id", async (req, res) => {
+  const siteId = getSiteId(req, res);
+  if (!siteId) return;
+
   const parsedId = paramsIdSchema.safeParse(req.params);
   if (!parsedId.success) {
     return res.status(400).json({ ok: false, error: { message: "Invalid tag id." } });
   }
 
+  const existingTag = await prisma.workTag.findFirst({
+    where: { id: parsedId.data.id, siteId },
+    select: { id: true },
+  });
+  if (!existingTag) {
+    return res.status(404).json({ ok: false, error: { message: "Tag not found." } });
+  }
+
   const usage = await prisma.workProjectTag.count({
-    where: { tagId: parsedId.data.id },
+    where: {
+      tagId: parsedId.data.id,
+      project: { siteId },
+    },
   });
   if (usage > 0) {
     return res.status(409).json({
@@ -234,22 +284,16 @@ router.delete("/tags/:id", async (req, res) => {
     });
   }
 
-  try {
-    await prisma.workTag.delete({ where: { id: parsedId.data.id } });
-    return res.json({ ok: true });
-  } catch (err) {
-    if (
-      err instanceof Prisma.PrismaClientKnownRequestError &&
-      err.code === "P2025"
-    ) {
-      return res.status(404).json({ ok: false, error: { message: "Tag not found." } });
-    }
-    throw err;
-  }
+  await prisma.workTag.delete({ where: { id: parsedId.data.id } });
+  return res.json({ ok: true });
 });
 
-router.get("/projects", async (_req, res) => {
+router.get("/projects", async (req, res) => {
+  const siteId = getSiteId(req, res);
+  if (!siteId) return;
+
   const projects = await prisma.workProject.findMany({
+    where: { siteId },
     orderBy: { updatedAt: "desc" },
     include: {
       tags: {
@@ -264,13 +308,16 @@ router.get("/projects", async (_req, res) => {
 });
 
 router.get("/projects/:id", async (req, res) => {
+  const siteId = getSiteId(req, res);
+  if (!siteId) return;
+
   const parsedId = paramsIdSchema.safeParse(req.params);
   if (!parsedId.success) {
     return res.status(400).json({ ok: false, error: { message: "Invalid project id." } });
   }
 
-  const project = await prisma.workProject.findUnique({
-    where: { id: parsedId.data.id },
+  const project = await prisma.workProject.findFirst({
+    where: { id: parsedId.data.id, siteId },
     include: {
       tags: {
         include: { tag: true },
@@ -286,6 +333,9 @@ router.get("/projects/:id", async (req, res) => {
 });
 
 router.post("/projects", async (req, res) => {
+  const siteId = getSiteId(req, res);
+  if (!siteId) return;
+
   const parsed = projectCreateSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({
@@ -295,7 +345,7 @@ router.post("/projects", async (req, res) => {
   }
 
   const tagsCount = await prisma.workTag.count({
-    where: { id: { in: parsed.data.tagIds } },
+    where: { siteId, id: { in: parsed.data.tagIds } },
   });
   if (tagsCount !== parsed.data.tagIds.length) {
     return res.status(400).json({
@@ -307,6 +357,7 @@ router.post("/projects", async (req, res) => {
   try {
     const project = await prisma.workProject.create({
       data: {
+        siteId,
         templateId: parsed.data.templateId,
         titleDraft: parsed.data.title,
         slugDraft: parsed.data.slug,
@@ -339,6 +390,9 @@ router.post("/projects", async (req, res) => {
 });
 
 router.put("/projects/:id", async (req, res) => {
+  const siteId = getSiteId(req, res);
+  if (!siteId) return;
+
   const parsedId = paramsIdSchema.safeParse(req.params);
   if (!parsedId.success) {
     return res.status(400).json({ ok: false, error: { message: "Invalid project id." } });
@@ -352,8 +406,16 @@ router.put("/projects/:id", async (req, res) => {
     });
   }
 
+  const existingProject = await prisma.workProject.findFirst({
+    where: { id: parsedId.data.id, siteId },
+    select: { id: true },
+  });
+  if (!existingProject) {
+    return res.status(404).json({ ok: false, error: { message: "Project not found." } });
+  }
+
   const tagsCount = await prisma.workTag.count({
-    where: { id: { in: parsed.data.tagIds } },
+    where: { siteId, id: { in: parsed.data.tagIds } },
   });
   if (tagsCount !== parsed.data.tagIds.length) {
     return res.status(400).json({
@@ -405,13 +467,16 @@ router.put("/projects/:id", async (req, res) => {
 });
 
 router.post("/projects/:id/publish", async (req, res) => {
+  const siteId = getSiteId(req, res);
+  if (!siteId) return;
+
   const parsedId = paramsIdSchema.safeParse(req.params);
   if (!parsedId.success) {
     return res.status(400).json({ ok: false, error: { message: "Invalid project id." } });
   }
 
-  const project = await prisma.workProject.findUnique({
-    where: { id: parsedId.data.id },
+  const project = await prisma.workProject.findFirst({
+    where: { id: parsedId.data.id, siteId },
     include: {
       tags: true,
     },
@@ -455,13 +520,16 @@ router.post("/projects/:id/publish", async (req, res) => {
 });
 
 router.post("/projects/:id/duplicate", async (req, res) => {
+  const siteId = getSiteId(req, res);
+  if (!siteId) return;
+
   const parsedId = paramsIdSchema.safeParse(req.params);
   if (!parsedId.success) {
     return res.status(400).json({ ok: false, error: { message: "Invalid project id." } });
   }
 
-  const original = await prisma.workProject.findUnique({
-    where: { id: parsedId.data.id },
+  const original = await prisma.workProject.findFirst({
+    where: { id: parsedId.data.id, siteId },
     include: {
       tags: true,
     },
@@ -482,6 +550,7 @@ router.post("/projects/:id/duplicate", async (req, res) => {
     try {
       const duplicated = await prisma.workProject.create({
         data: {
+          siteId,
           templateId: original.templateId,
           titleDraft: `${original.titleDraft} Copy`,
           slugDraft: nextSlug,
@@ -517,3 +586,4 @@ router.post("/projects/:id/duplicate", async (req, res) => {
 });
 
 export default router;
+

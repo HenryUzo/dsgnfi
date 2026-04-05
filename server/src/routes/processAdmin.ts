@@ -5,6 +5,7 @@ import crypto from "crypto";
 
 import { prisma } from "../db/prisma";
 import { requireAdmin } from "../middleware/requireAdmin";
+import { withAdminSiteContext } from "../middleware/withAdminSiteContext";
 
 const router = Router();
 
@@ -107,11 +108,21 @@ function toInputJsonObject(value: unknown): Prisma.InputJsonObject {
   return value as Prisma.InputJsonObject;
 }
 
-router.use(requireAdmin);
+router.use(requireAdmin, withAdminSiteContext);
 
-router.get("/content", async (_req, res) => {
+router.get("/content", async (req, res) => {
+  const siteId = req.context?.siteId;
+  if (!siteId) {
+    return res.status(500).json({
+      ok: false,
+      error: { message: "Missing admin site context." },
+    });
+  }
+
   const existing = await prisma.cmsSection.findUnique({
-    where: { page_section: { page: PAGE_KEY, section: SECTION_KEY } },
+    where: {
+      siteId_page_section: { siteId, page: PAGE_KEY, section: SECTION_KEY },
+    },
   });
 
   const draftBlocks = existing
@@ -122,12 +133,15 @@ router.get("/content", async (_req, res) => {
 
   const record = isEmptyDraft
     ? await prisma.cmsSection.upsert({
-        where: { page_section: { page: PAGE_KEY, section: SECTION_KEY } },
+        where: {
+          siteId_page_section: { siteId, page: PAGE_KEY, section: SECTION_KEY },
+        },
         update: {
           draftData: toInputJsonObject(defaultContent),
           status: "DRAFT",
         },
         create: {
+          siteId,
           page: PAGE_KEY,
           section: SECTION_KEY,
           draftData: toInputJsonObject(defaultContent),
@@ -146,6 +160,14 @@ router.get("/content", async (_req, res) => {
 });
 
 router.put("/content", async (req, res) => {
+  const siteId = req.context?.siteId;
+  if (!siteId) {
+    return res.status(500).json({
+      ok: false,
+      error: { message: "Missing admin site context." },
+    });
+  }
+
   const parsed = contentSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({
@@ -155,12 +177,15 @@ router.put("/content", async (req, res) => {
   }
 
   const record = await prisma.cmsSection.upsert({
-    where: { page_section: { page: PAGE_KEY, section: SECTION_KEY } },
+    where: {
+      siteId_page_section: { siteId, page: PAGE_KEY, section: SECTION_KEY },
+    },
     update: {
       draftData: toInputJsonObject(parsed.data),
       status: "DRAFT",
     },
     create: {
+      siteId,
       page: PAGE_KEY,
       section: SECTION_KEY,
       draftData: toInputJsonObject(parsed.data),
@@ -172,11 +197,22 @@ router.put("/content", async (req, res) => {
   return res.json({ ok: true, data: record.draftData });
 });
 
-router.post("/content/publish", async (_req, res) => {
+router.post("/content/publish", async (req, res) => {
+  const siteId = req.context?.siteId;
+  if (!siteId) {
+    return res.status(500).json({
+      ok: false,
+      error: { message: "Missing admin site context." },
+    });
+  }
+
   const record = await prisma.cmsSection.upsert({
-    where: { page_section: { page: PAGE_KEY, section: SECTION_KEY } },
+    where: {
+      siteId_page_section: { siteId, page: PAGE_KEY, section: SECTION_KEY },
+    },
     update: {},
     create: {
+      siteId,
       page: PAGE_KEY,
       section: SECTION_KEY,
       draftData: toInputJsonObject(defaultContent),
@@ -186,7 +222,9 @@ router.post("/content/publish", async (_req, res) => {
   });
 
   const updated = await prisma.cmsSection.update({
-    where: { page_section: { page: PAGE_KEY, section: SECTION_KEY } },
+    where: {
+      siteId_page_section: { siteId, page: PAGE_KEY, section: SECTION_KEY },
+    },
     data: {
       publishedData: toInputJsonObject(record.draftData),
       status: "PUBLISHED",
