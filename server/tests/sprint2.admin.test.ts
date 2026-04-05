@@ -15,6 +15,8 @@ const mockPrisma = {
   siteDomain: { findFirst: vi.fn() },
   site: { findFirst: vi.fn(), findUnique: vi.fn(), findMany: vi.fn(), create: vi.fn() },
   siteSettings: { create: vi.fn() },
+  page: { findUnique: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn() },
+  pageRevision: { create: vi.fn(), findFirst: vi.fn(), findMany: vi.fn() },
   membership: { findMany: vi.fn(), findFirst: vi.fn() },
   cmsSection: { findUnique: vi.fn(), upsert: vi.fn(), update: vi.fn() },
   workPageMeta: { findUnique: vi.fn(), upsert: vi.fn(), update: vi.fn() },
@@ -281,6 +283,19 @@ beforeEach(() => {
   mockPrisma.siteSettings.create.mockResolvedValue(null);
   mockPrisma.membership.findMany.mockResolvedValue([]);
   mockPrisma.membership.findFirst.mockResolvedValue(null);
+  mockPrisma.page.findUnique.mockResolvedValue(null);
+  mockPrisma.page.findMany.mockResolvedValue([]);
+  mockPrisma.page.create.mockImplementation(async (args: any) => ({
+    id: `page-${args.data.pageKey}`,
+    ...args.data,
+  }));
+  mockPrisma.page.update.mockResolvedValue({});
+  mockPrisma.pageRevision.create.mockImplementation(async (args: any) => ({
+    id: `revision-${args.data.pageId}-${args.data.revisionNumber}`,
+    ...args.data,
+  }));
+  mockPrisma.pageRevision.findFirst.mockResolvedValue(null);
+  mockPrisma.pageRevision.findMany.mockResolvedValue([]);
   mockPrisma.cmsSection.findUnique.mockResolvedValue(null);
   mockPrisma.workPageMeta.upsert.mockResolvedValue({});
   mockPrisma.template.findMany.mockResolvedValue([]);

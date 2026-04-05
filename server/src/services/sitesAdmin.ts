@@ -5,6 +5,7 @@ import {
   ensureTemplateCatalog,
   resolveTemplateSelection,
 } from "./templateCatalog";
+import { ensureStarterPagesForSite } from "./pageCatalog";
 
 type SiteWithRelations = Prisma.SiteGetPayload<{
   include: {
@@ -145,6 +146,8 @@ export async function createAdminSite(
     update: {},
     create: { siteId: site.id, key: "work" },
   });
+
+  await ensureStarterPagesForSite(prisma, { siteId: site.id });
 
   return getAdminSiteDetail(prisma, {
     tenantId: options.tenantId,

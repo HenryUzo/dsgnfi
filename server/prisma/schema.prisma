@@ -40,12 +40,25 @@ enum TemplateStatus {
   INACTIVE
 }
 
+enum PageStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum PageRevisionState {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
 model AdminUser {
   id           String   @id @default(uuid()) @db.Uuid
   email        String   @unique
   passwordHash String
   createdAt    DateTime @default(now())
   memberships  Membership[]
+  createdPageRevisions   PageRevision[] @relation("PageRevisionCreatedBy")
+  publishedPageRevisions PageRevision[] @relation("PageRevisionPublishedBy")
 }
 
 model Tenant {
@@ -74,6 +87,7 @@ model Site {
   templateVersion TemplateVersion? @relation(fields: [templateVersionId], references: [id], onDelete: SetNull)
   domains      SiteDomain[]
   settings     SiteSettings?
+  pages        Page[]
   cmsSections  CmsSection[]
   workMeta     WorkPageMeta[]
   workTags     WorkTag[]
@@ -162,6 +176,52 @@ model SiteSettings {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   site           Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+}
+
+model Page {
+  id                       String        @id @default(uuid()) @db.Uuid
+  siteId                   String        @db.Uuid
+  pageKey                  String
+  slug                     String
+  title                    String
+  status                   PageStatus    @default(DRAFT)
+  seoTitle                 String?
+  seoDescription           String?
+  currentDraftRevisionId   String?       @db.Uuid
+  currentPublishedRevisionId String?     @db.Uuid
+  createdAt                DateTime      @default(now())
+  updatedAt                DateTime      @updatedAt
+  site                     Site          @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  revisions                PageRevision[] @relation("PageRevisions")
+  currentDraftRevision     PageRevision? @relation("CurrentDraftRevision", fields: [currentDraftRevisionId], references: [id], onDelete: SetNull)
+  currentPublishedRevision PageRevision? @relation("CurrentPublishedRevision", fields: [currentPublishedRevisionId], references: [id], onDelete: SetNull)
+
+  @@unique([siteId, pageKey])
+  @@unique([siteId, slug])
+  @@index([siteId, status])
+}
+
+model PageRevision {
+  id                String            @id @default(uuid()) @db.Uuid
+  pageId            String            @db.Uuid
+  revisionNumber    Int
+  state             PageRevisionState
+  content           Json
+  schemaVersion     Int               @default(1)
+  checksum          String?
+  createdBy         String?           @db.Uuid
+  publishedBy       String?           @db.Uuid
+  createdAt         DateTime          @default(now())
+  publishedAt       DateTime?
+  page              Page              @relation("PageRevisions", fields: [pageId], references: [id], onDelete: Cascade)
+  createdByUser     AdminUser?        @relation("PageRevisionCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  publishedByUser   AdminUser?        @relation("PageRevisionPublishedBy", fields: [publishedBy], references: [id], onDelete: SetNull)
+  currentDraftFor   Page[]            @relation("CurrentDraftRevision")
+  currentPublishedFor Page[]          @relation("CurrentPublishedRevision")
+
+  @@unique([pageId, revisionNumber])
+  @@index([pageId, revisionNumber])
+  @@index([pageId, state, createdAt])
 }
 
 model CmsSection {

@@ -1,3 +1,4 @@
+import { buildStarterSupportedPages } from "../pageDefaults";
 import type { TemplateManifest } from "../types";
 
 export const logisticsStarterManifest: TemplateManifest = {
@@ -27,5 +28,8 @@ export const logisticsStarterManifest: TemplateManifest = {
     processEnabled: true,
   },
   editableFieldGroups: ["branding", "seo", "contact", "theme"],
+  supportedPages: buildStarterSupportedPages({
+    processEnabled: true,
+    workEnabled: false,
+  }),
 };
-
