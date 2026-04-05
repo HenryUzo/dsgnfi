@@ -6,6 +6,37 @@ export type TemplateCategory =
   | "property"
   | "logistics";
 
+export type PageKey = "home" | "about" | "contact" | "process" | "work";
+
+export type PageBlockType =
+  | "hero"
+  | "richText"
+  | "features"
+  | "faq"
+  | "cta"
+  | "contact"
+  | "stats"
+  | "gallery";
+
+export type PageBlockInput = {
+  id: string;
+  type: PageBlockType;
+  data: Record<string, unknown>;
+};
+
+export type SupportedPageDefinition = {
+  pageKey: PageKey;
+  title: string;
+  slug: string;
+  isRequired: boolean;
+  allowedBlockTypes: PageBlockType[];
+  defaultBlocks: PageBlockInput[];
+  seoDefaults?: {
+    seoTitle?: string;
+    seoDescription?: string;
+  };
+};
+
 export type StarterSiteSettings = {
   tagline?: string | null;
   contactEmail?: string | null;
@@ -37,5 +68,5 @@ export type TemplateManifest = {
     processEnabled: boolean;
   };
   editableFieldGroups: string[];
+  supportedPages: SupportedPageDefinition[];
 };
-

@@ -1,3 +1,4 @@
+import { buildStarterSupportedPages } from "../pageDefaults";
 import type { TemplateManifest } from "../types";
 
 export const realEstateStarterManifest: TemplateManifest = {
@@ -27,5 +28,8 @@ export const realEstateStarterManifest: TemplateManifest = {
     processEnabled: true,
   },
   editableFieldGroups: ["branding", "seo", "contact", "theme"],
+  supportedPages: buildStarterSupportedPages({
+    processEnabled: true,
+    workEnabled: true,
+  }),
 };
-

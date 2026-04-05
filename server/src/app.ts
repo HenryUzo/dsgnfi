@@ -15,6 +15,8 @@ import { runtimeDebug } from "./debug/runtimeDebug";
 import authRouter from "./routes/auth";
 import cmsAdminRouter from "./routes/cmsAdmin";
 import cmsPublicRouter from "./routes/cmsPublic";
+import pagesAdminRouter from "./routes/pagesAdmin";
+import pagesPublicRouter from "./routes/pagesPublic";
 import processAdminRouter from "./routes/processAdmin";
 import processPublicRouter from "./routes/processPublic";
 import sitesAdminRouter from "./routes/sitesAdmin";
@@ -135,6 +137,7 @@ export function createApp() {
 
   app.use("/public", publicLimiter);
   app.use("/public/cms", cmsPublicRouter);
+  app.use("/public/pages", pagesPublicRouter);
   app.use("/public/work", workPublicRouter);
   app.use("/public/process", processPublicRouter);
 
@@ -143,6 +146,7 @@ export function createApp() {
   app.use("/admin/uploads", uploadsRouter);
   app.use("/admin/templates", templatesAdminRouter);
   app.use("/admin/sites", sitesAdminRouter);
+  app.use("/admin/pages", pagesAdminRouter);
   app.use("/admin/work", workAdminRouter);
   app.use("/admin/process", processAdminRouter);
 
