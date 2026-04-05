@@ -7,12 +7,33 @@ const seedTagSlug = process.env.SEED_WORK_TAG_SLUG ?? "branding";
 const seedProjectTitle = process.env.SEED_WORK_PROJECT_TITLE ?? "Sample Work Project";
 const seedProjectSlug = process.env.SEED_WORK_PROJECT_SLUG ?? "sample-work-project";
 const seedTemplateId = process.env.SEED_WORK_TEMPLATE_ID ?? "classic-case-study";
+const defaultTenantSlug = process.env.DEFAULT_TENANT_SLUG ?? "dsgnfi";
+const defaultSiteSlug = process.env.DEFAULT_SITE_SLUG ?? "main";
 
 async function main() {
+  const tenant = await prisma.tenant.upsert({
+    where: { slug: defaultTenantSlug },
+    update: { name: "Dsgnfi" },
+    create: { name: "Dsgnfi", slug: defaultTenantSlug },
+  });
+
+  const site = await prisma.site.upsert({
+    where: { tenantId_slug: { tenantId: tenant.id, slug: defaultSiteSlug } },
+    update: { name: "Main Site", status: "ACTIVE", isDefault: true },
+    create: {
+      tenantId: tenant.id,
+      name: "Main Site",
+      slug: defaultSiteSlug,
+      status: "ACTIVE",
+      isDefault: true,
+    },
+  });
+
   await prisma.workPageMeta.upsert({
-    where: { key: "work" },
+    where: { siteId_key: { siteId: site.id, key: "work" } },
     update: {},
     create: {
+      siteId: site.id,
       key: "work",
       titleDraft: "Our Work",
       subtitleDraft: "Selected projects and outcomes.",
@@ -24,18 +45,19 @@ async function main() {
   });
 
   const tag = await prisma.workTag.upsert({
-    where: { slug: seedTagSlug },
+    where: { siteId_slug: { siteId: site.id, slug: seedTagSlug } },
     update: { name: seedTagName },
-    create: { name: seedTagName, slug: seedTagSlug },
+    create: { siteId: site.id, name: seedTagName, slug: seedTagSlug },
   });
 
-  const existing = await prisma.workProject.findUnique({
-    where: { slugDraft: seedProjectSlug },
+  const existing = await prisma.workProject.findFirst({
+    where: { siteId: site.id, slugDraft: seedProjectSlug },
   });
 
   if (!existing) {
     await prisma.workProject.create({
       data: {
+        siteId: site.id,
         templateId: seedTemplateId,
         titleDraft: seedProjectTitle,
         slugDraft: seedProjectSlug,
@@ -110,3 +132,7 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+
+
+
+

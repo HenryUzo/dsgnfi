@@ -9,8 +9,11 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "seed:admin": "tsx src/scripts/seedAdmin.ts",
+    "seed:templates": "tsx src/scripts/seedTemplates.ts",
     "seed:work": "tsx src/scripts/seedWork.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "prisma generate && tsc -p tsconfig.json --noEmit"
   },
   "keywords": [],
   "author": "",
@@ -43,9 +46,12 @@
     "@types/multer": "^1.4.13",
     "@types/node": "^25.3.0",
     "@types/pg": "^8.18.0",
+    "@types/supertest": "^6.0.3",
     "nodemon": "^3.1.14",
     "prisma": "^7.4.2",
+    "supertest": "^7.1.4",
     "tsx": "^4.21.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
   }
 }

@@ -18,7 +18,12 @@ export function requireAdmin(
 
   try {
     const payload = verifyToken(token);
-    req.admin = { id: payload.id, email: payload.email };
+    req.admin = {
+      id: payload.id,
+      email: payload.email,
+      tenantId: payload.tenantId,
+      siteId: payload.siteId,
+    };
     return next();
   } catch {
     return res.status(401).json({

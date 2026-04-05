@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 
 import { prisma } from "../db/prisma";
+import { withPublicSiteContext } from "../middleware/withPublicSiteContext";
 
 const router = Router();
 
@@ -13,9 +14,19 @@ const slugParamsSchema = z.object({
   slug: z.string().min(1),
 });
 
-router.get("/meta", async (_req, res) => {
+router.use(withPublicSiteContext);
+
+router.get("/meta", async (req, res) => {
+  const siteId = req.context?.siteId;
+  if (!siteId) {
+    return res.status(500).json({
+      ok: false,
+      error: { message: "Missing public site context." },
+    });
+  }
+
   const meta = await prisma.workPageMeta.findUnique({
-    where: { key: "work" },
+    where: { siteId_key: { siteId, key: "work" } },
   });
 
   return res.json({
@@ -24,12 +35,21 @@ router.get("/meta", async (_req, res) => {
   });
 });
 
-router.get("/tags", async (_req, res) => {
+router.get("/tags", async (req, res) => {
+  const siteId = req.context?.siteId;
+  if (!siteId) {
+    return res.status(500).json({
+      ok: false,
+      error: { message: "Missing public site context." },
+    });
+  }
+
   const tags = await prisma.workTag.findMany({
     where: {
+      siteId,
       projects: {
         some: {
-          project: { status: "PUBLISHED" },
+          project: { status: "PUBLISHED", siteId },
         },
       },
     },
@@ -40,6 +60,14 @@ router.get("/tags", async (_req, res) => {
 });
 
 router.get("/projects", async (req, res) => {
+  const siteId = req.context?.siteId;
+  if (!siteId) {
+    return res.status(500).json({
+      ok: false,
+      error: { message: "Missing public site context." },
+    });
+  }
+
   const parsed = tagQuerySchema.safeParse(req.query);
   if (!parsed.success) {
     return res.status(400).json({ ok: false, error: { message: "Invalid query." } });
@@ -49,6 +77,7 @@ router.get("/projects", async (req, res) => {
 
   const projects = await prisma.workProject.findMany({
     where: {
+      siteId,
       status: "PUBLISHED",
       ...(tagSlug
         ? {
@@ -56,6 +85,7 @@ router.get("/projects", async (req, res) => {
               some: {
                 tag: {
                   slug: tagSlug,
+                  siteId,
                 },
               },
             },
@@ -83,6 +113,14 @@ router.get("/projects", async (req, res) => {
 });
 
 router.get("/projects/:slug", async (req, res) => {
+  const siteId = req.context?.siteId;
+  if (!siteId) {
+    return res.status(500).json({
+      ok: false,
+      error: { message: "Missing public site context." },
+    });
+  }
+
   const parsed = slugParamsSchema.safeParse(req.params);
   if (!parsed.success) {
     return res.status(400).json({ ok: false, error: { message: "Invalid slug." } });
@@ -90,6 +128,7 @@ router.get("/projects/:slug", async (req, res) => {
 
   const project = await prisma.workProject.findFirst({
     where: {
+      siteId,
       status: "PUBLISHED",
       slugPublished: parsed.data.slug,
     },

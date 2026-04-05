@@ -11,15 +11,162 @@ enum CmsStatus {
   PUBLISHED
 }
 
+enum SiteStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum MembershipRole {
+  OWNER
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+enum SiteDomainType {
+  SUBDOMAIN
+  CUSTOM
+}
+
+enum DomainVerificationStatus {
+  PENDING
+  VERIFIED
+  FAILED
+}
+
+enum TemplateStatus {
+  ACTIVE
+  INACTIVE
+}
+
 model AdminUser {
   id           String   @id @default(uuid()) @db.Uuid
   email        String   @unique
   passwordHash String
   createdAt    DateTime @default(now())
+  memberships  Membership[]
+}
+
+model Tenant {
+  id          String       @id @default(uuid()) @db.Uuid
+  name        String
+  slug        String       @unique
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  sites       Site[]
+  memberships Membership[]
+}
+
+model Site {
+  id           String        @id @default(uuid()) @db.Uuid
+  tenantId     String        @db.Uuid
+  templateId   String?       @db.Uuid
+  templateVersionId String?  @db.Uuid
+  name         String
+  slug         String
+  status       SiteStatus    @default(DRAFT)
+  isDefault    Boolean       @default(false)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  template     Template?     @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  templateVersion TemplateVersion? @relation(fields: [templateVersionId], references: [id], onDelete: SetNull)
+  domains      SiteDomain[]
+  settings     SiteSettings?
+  cmsSections  CmsSection[]
+  workMeta     WorkPageMeta[]
+  workTags     WorkTag[]
+  workProjects WorkProject[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@index([tenantId, isDefault])
+  @@index([templateId])
+  @@index([templateVersionId])
+}
+
+model Membership {
+  id        String         @id @default(uuid()) @db.Uuid
+  userId    String         @db.Uuid
+  tenantId  String         @db.Uuid
+  role      MembershipRole
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  user      AdminUser      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant    Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tenantId])
+  @@index([userId])
+  @@index([tenantId])
+}
+
+model SiteDomain {
+  id                 String                   @id @default(uuid()) @db.Uuid
+  siteId             String                   @db.Uuid
+  hostname           String                   @unique
+  type               SiteDomainType
+  isPrimary          Boolean                  @default(false)
+  verificationStatus DomainVerificationStatus @default(PENDING)
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+  site               Site                     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([siteId])
+}
+
+model Template {
+  id          String            @id @default(uuid()) @db.Uuid
+  key         String            @unique
+  name        String
+  category    String
+  description String
+  status      TemplateStatus    @default(ACTIVE)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  versions    TemplateVersion[]
+  sites       Site[]
+}
+
+model TemplateVersion {
+  id           String      @id @default(uuid()) @db.Uuid
+  templateId   String      @db.Uuid
+  version      String
+  isActive     Boolean     @default(true)
+  manifestKey  String
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  template     Template    @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  sites        Site[]
+
+  @@unique([templateId, version])
+  @@index([templateId])
+  @@index([manifestKey])
+}
+
+model SiteSettings {
+  id             String   @id @default(uuid()) @db.Uuid
+  siteId         String   @unique @db.Uuid
+  logoUrl        String?
+  faviconUrl     String?
+  tagline        String?
+  contactEmail   String?
+  contactPhone   String?
+  address        String?
+  socialLinks    Json?
+  seoTitle       String?
+  seoDescription String?
+  theme          Json?
+  locale         String?
+  timezone       String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  site           Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
 }
 
 model CmsSection {
   id            String    @id @default(uuid()) @db.Uuid
+  siteId        String    @db.Uuid
   page          String
   section       String
   status        CmsStatus @default(DRAFT)
@@ -27,13 +174,15 @@ model CmsSection {
   publishedData Json      @default(dbgenerated("'{}'::jsonb"))
   updatedAt     DateTime  @updatedAt
   publishedAt   DateTime?
+  site          Site      @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
-  @@unique([page, section])
-  @@index([page])
+  @@unique([siteId, page, section])
+  @@index([siteId, page])
 }
 
 model WorkPageMeta {
-  key               String    @id @default("work")
+  siteId            String    @db.Uuid
+  key               String    @default("work")
   titleDraft        String    @default("Our Work")
   subtitleDraft     String    @default("")
   titlePublished    String    @default("Our Work")
@@ -41,27 +190,37 @@ model WorkPageMeta {
   status            CmsStatus @default(DRAFT)
   publishedAt       DateTime?
   updatedAt         DateTime  @updatedAt
+  site              Site      @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@id([siteId, key])
+  @@index([siteId])
 }
 
 model WorkTag {
   id        String           @id @default(uuid()) @db.Uuid
+  siteId    String           @db.Uuid
   name      String
-  slug      String           @unique
+  slug      String
   createdAt DateTime         @default(now())
   updatedAt DateTime         @updatedAt
+  site      Site             @relation(fields: [siteId], references: [id], onDelete: Cascade)
   projects  WorkProjectTag[]
+
+  @@unique([siteId, slug])
+  @@index([siteId])
 }
 
 model WorkProject {
   id                 String           @id @default(uuid()) @db.Uuid
+  siteId             String           @db.Uuid
   templateId         String
   titleDraft         String
-  slugDraft          String           @unique
+  slugDraft          String
   excerptDraft       String
   coverImageDraft    String
   draftContent       Json             @default(dbgenerated("'{}'::jsonb"))
   titlePublished     String?
-  slugPublished      String?          @unique
+  slugPublished      String?
   excerptPublished   String?
   coverImagePublished String?
   publishedContent   Json             @default(dbgenerated("'{}'::jsonb"))
@@ -69,9 +228,12 @@ model WorkProject {
   publishedAt        DateTime?
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
+  site               Site             @relation(fields: [siteId], references: [id], onDelete: Cascade)
   tags               WorkProjectTag[]
 
-  @@index([status])
+  @@unique([siteId, slugDraft])
+  @@unique([siteId, slugPublished])
+  @@index([siteId, status])
 }
 
 model WorkProjectTag {
