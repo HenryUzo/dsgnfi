@@ -59,6 +59,8 @@ model AdminUser {
   memberships  Membership[]
   createdPageRevisions   PageRevision[] @relation("PageRevisionCreatedBy")
   publishedPageRevisions PageRevision[] @relation("PageRevisionPublishedBy")
+  previewTokens PreviewToken[]
+  auditLogs     AuditLog[] @relation("AuditLogActor")
 }
 
 model Tenant {
@@ -92,6 +94,9 @@ model Site {
   workMeta     WorkPageMeta[]
   workTags     WorkTag[]
   workProjects WorkProject[]
+  assets       Asset[]
+  previewTokens PreviewToken[]
+  auditLogs    AuditLog[]
 
   @@unique([tenantId, slug])
   @@index([tenantId])
@@ -122,11 +127,50 @@ model SiteDomain {
   type               SiteDomainType
   isPrimary          Boolean                  @default(false)
   verificationStatus DomainVerificationStatus @default(PENDING)
+  verificationHost   String?
+  verificationValue  String?
+  verifiedAt         DateTime?
+  lastVerificationAttemptAt DateTime?
+  lastVerificationError String?
   createdAt          DateTime                 @default(now())
   updatedAt          DateTime                 @updatedAt
   site               Site                     @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
   @@index([siteId])
+}
+
+model PreviewToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  siteId    String   @db.Uuid
+  pageKey   String?
+  tokenHash String   @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  note      String?
+  createdBy String?  @db.Uuid
+  createdAt DateTime @default(now())
+  site      Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  createdByUser AdminUser? @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+
+  @@index([siteId, expiresAt])
+  @@index([siteId, pageKey])
+}
+
+model AuditLog {
+  id               String     @id @default(uuid()) @db.Uuid
+  actorAdminUserId String?    @db.Uuid
+  siteId           String?    @db.Uuid
+  action           String
+  entityType       String
+  entityId         String?
+  metadata         Json?
+  createdAt        DateTime   @default(now())
+  actorAdminUser   AdminUser? @relation("AuditLogActor", fields: [actorAdminUserId], references: [id], onDelete: SetNull)
+  site             Site?      @relation(fields: [siteId], references: [id], onDelete: SetNull)
+
+  @@index([siteId, createdAt])
+  @@index([actorAdminUserId, createdAt])
+  @@index([action, createdAt])
 }
 
 model Template {
@@ -171,11 +215,28 @@ model SiteSettings {
   seoTitle       String?
   seoDescription String?
   theme          Json?
+  primaryNavigation Json?
+  footerNavigation Json?
   locale         String?
   timezone       String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   site           Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+}
+
+model Asset {
+  id        String   @id @default(uuid()) @db.Uuid
+  siteId    String   @db.Uuid
+  url       String
+  filename  String
+  mimeType  String
+  size      Int
+  altText   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  site      Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([siteId, createdAt])
 }
 
 model Page {

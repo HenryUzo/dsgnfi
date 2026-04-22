@@ -135,6 +135,168 @@ const galleryBlockSchema = z.object({
         )
         .min(1),
     })
+  .strict(),
+});
+
+const timelineBlockSchema = z.object({
+  id: z.string().min(1),
+  type: z.literal("timeline"),
+  data: z
+    .object({
+      title: z.string().min(1).optional(),
+      items: z
+        .array(
+          z
+            .object({
+              year: z.string().min(1),
+              title: z.string().min(1),
+              description: z.string().min(1),
+            })
+            .strict()
+        )
+        .min(1),
+    })
+    .strict(),
+});
+
+const processHeroAtticSaltBlockSchema = z.object({
+  id: z.string().min(1),
+  type: z.literal("processHeroAtticSalt"),
+  variant: z.string().min(1).optional(),
+  data: z
+    .object({
+      title: z.string().min(1),
+      collageImageUrl: z.string(),
+      collageAlt: z.string().optional(),
+    })
+    .strict(),
+});
+
+const processMethodIntroBlockSchema = z.object({
+  id: z.string().min(1),
+  type: z.literal("processMethodIntro"),
+  variant: z.string().min(1).optional(),
+  data: z
+    .object({
+      kicker: z.string().min(1),
+      paragraphs: z.array(z.string().min(1)).min(1),
+      highlightWords: z.array(z.string()).optional(),
+    })
+    .strict(),
+});
+
+const processStepsAccordionBlockSchema = z.object({
+  id: z.string().min(1),
+  type: z.literal("processStepsAccordion"),
+  variant: z.string().min(1).optional(),
+  data: z
+    .object({
+      heading: z.string().min(1),
+      steps: z
+        .array(
+          z
+            .object({
+              number: z.string().min(1),
+              title: z.string().min(1),
+              description: z.string().min(1),
+              deliverables: z.array(z.string()).optional(),
+            })
+            .strict()
+        )
+        .min(1),
+    })
+    .strict(),
+});
+
+const processMediaPeekCarouselBlockSchema = z.object({
+  id: z.string().min(1),
+  type: z.literal("processMediaPeekCarousel"),
+  variant: z.string().min(1).optional(),
+  data: z
+    .object({
+      heading: z.string().min(1),
+      description: z.string().min(1),
+      slides: z
+        .array(
+          z
+            .object({
+              title: z.string().min(1),
+              mainImageUrl: z.string(),
+              peekImageUrl: z.string().optional(),
+            })
+            .strict()
+        )
+        .min(1),
+      showCounter: z.boolean().optional(),
+    })
+    .strict(),
+});
+
+const processCtaOutlineBlockSchema = z.object({
+  id: z.string().min(1),
+  type: z.literal("processCtaOutline"),
+  variant: z.string().min(1).optional(),
+  data: z
+    .object({
+      title: z.string().min(1),
+      linkLabel: z.string().min(1),
+      href: hrefSchema,
+    })
+    .strict(),
+});
+
+const processHeroBlockSchema = z.object({
+  id: z.string().min(1),
+  type: z.literal("hero"),
+  variant: z.string().min(1).optional(),
+  data: z
+    .object({
+      eyebrow: z.string().optional(),
+      headline: z.string().min(1),
+      subheadline: z.string().optional(),
+      backgroundImage: z.string().optional(),
+      primaryCtaLabel: z.string().optional(),
+      primaryCtaHref: hrefSchema.optional(),
+    })
+    .strict(),
+});
+
+const processRichTextBlockSchema = z.object({
+  id: z.string().min(1),
+  type: z.literal("richText"),
+  variant: z.string().min(1).optional(),
+  data: z
+    .object({
+      eyebrow: z.string().optional(),
+      title: z.string().optional(),
+      body: z.string().min(1),
+    })
+    .strict(),
+});
+
+const processGalleryBlockSchema = z.object({
+  id: z.string().min(1),
+  type: z.literal("gallery"),
+  variant: z.string().min(1).optional(),
+  data: z
+    .object({
+      images: z.array(z.string()).min(1),
+      caption: z.string().optional(),
+    })
+    .strict(),
+});
+
+const processCtaBlockSchema = z.object({
+  id: z.string().min(1),
+  type: z.literal("cta"),
+  variant: z.string().min(1).optional(),
+  data: z
+    .object({
+      title: z.string().min(1),
+      description: z.string().optional(),
+      primaryLabel: z.string().min(1),
+      primaryHref: hrefSchema,
+    })
     .strict(),
 });
 
@@ -167,6 +329,29 @@ export const pageDraftInputSchema = z
 
 export type PageDraftInput = z.infer<typeof pageDraftInputSchema>;
 export type PageContentInput = PageDraftInput["content"];
+
+const processCompatibilityBlockSchema = z.discriminatedUnion("type", [
+  processHeroAtticSaltBlockSchema,
+  processMethodIntroBlockSchema,
+  processStepsAccordionBlockSchema,
+  processMediaPeekCarouselBlockSchema,
+  processCtaOutlineBlockSchema,
+  processHeroBlockSchema,
+  processRichTextBlockSchema,
+  timelineBlockSchema,
+  processGalleryBlockSchema,
+  processCtaBlockSchema,
+]);
+
+const processCompatibilityContentSchema = z
+  .object({
+    blocks: z.array(processCompatibilityBlockSchema),
+  })
+  .strict();
+
+export type ProcessCompatibilityContent = z.infer<
+  typeof processCompatibilityContentSchema
+>;
 
 export function validatePageDraftInput(
   pageDefinition: SupportedPageDefinition,
@@ -224,4 +409,8 @@ export function validatePageContent(
   }
 
   return parsed;
+}
+
+export function validateProcessCompatibilityContent(content: unknown) {
+  return processCompatibilityContentSchema.safeParse(content);
 }

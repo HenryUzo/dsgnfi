@@ -18,6 +18,10 @@ app.listen(port, () => {
           startedAt: runtimeDebug.startedAt,
           jwtSecretHashPrefix: runtimeDebug.jwtSecretHashPrefix,
           nodeEnv: runtimeDebug.nodeEnv,
+          frontendOriginConfigured: Boolean(env.FRONTEND_ORIGIN),
+          backendOriginConfigured: Boolean(env.BACKEND_ORIGIN),
+          appBaseDomainConfigured: Boolean(env.APP_BASE_DOMAIN),
+          uploadsDirConfigured: Boolean(env.UPLOADS_DIR),
         }
       : { port },
     "CMS API server listening"

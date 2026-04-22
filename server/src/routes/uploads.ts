@@ -1,9 +1,12 @@
-﻿import crypto from "crypto";
+import crypto from "crypto";
 import path from "path";
 import { Router } from "express";
 import multer from "multer";
 
+import { prisma } from "../db/prisma";
 import { requireAdmin } from "../middleware/requireAdmin";
+import { withAdminSiteContext } from "../middleware/withAdminSiteContext";
+import { createAdminAsset } from "../services/assetsAdmin";
 
 const router = Router();
 
@@ -18,7 +21,7 @@ const storage = multer.diskStorage({
   },
 });
 
-const upload = multer({
+export const upload = multer({
   storage,
   limits: { fileSize: 50 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
@@ -32,7 +35,7 @@ const upload = multer({
   },
 });
 
-router.post("/", requireAdmin, upload.single("file"), (req, res) => {
+router.post("/", requireAdmin, withAdminSiteContext, upload.single("file"), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({
       ok: false,
@@ -40,10 +43,25 @@ router.post("/", requireAdmin, upload.single("file"), (req, res) => {
     });
   }
 
+  const siteId = req.context?.siteId;
+  if (!siteId) {
+    return res.status(500).json({
+      ok: false,
+      error: { message: "Missing admin site context." },
+    });
+  }
+
   const baseUrl = `${req.protocol}://${req.get("host")}`;
   const url = `${baseUrl}/uploads/${req.file.filename}`;
+  const asset = await createAdminAsset(prisma, {
+    siteId,
+    url,
+    filename: req.file.originalname,
+    mimeType: req.file.mimetype,
+    size: req.file.size,
+  });
 
-  return res.json({ ok: true, url });
+  return res.json({ ok: true, url, asset });
 });
 
 export default router;

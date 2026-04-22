@@ -33,3 +33,5 @@ server/uploads/
 .vercel/
 .vercel
 .env*.local
+!server/.env.example
+!app/.env.example

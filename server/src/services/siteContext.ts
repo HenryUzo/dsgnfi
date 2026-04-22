@@ -46,6 +46,15 @@ function resolveDevSubdomainSlug(hostname: string): string | null {
   return parts[0] ?? null;
 }
 
+function isLocalDevelopmentHost(hostname: string): boolean {
+  const normalized = normalizeHost(hostname);
+  if (!normalized) return true;
+  if (normalized === "localhost" || normalized === "127.0.0.1" || normalized === "[::1]") {
+    return true;
+  }
+  return normalized.endsWith(".localhost");
+}
+
 async function findDefaultSiteForTenant(
   prisma: PrismaClient,
   tenantId: string
@@ -184,7 +193,17 @@ export async function resolvePublicSiteContext(
 
   if (host) {
     const domainMatch = await prisma.siteDomain.findFirst({
-      where: { hostname: host },
+      where: {
+        hostname: host,
+        OR: [
+          { type: "SUBDOMAIN" },
+          {
+            type: "CUSTOM",
+            isPrimary: true,
+            verificationStatus: "VERIFIED",
+          },
+        ],
+      },
       include: { site: { include: { tenant: true } } },
     });
 
@@ -242,40 +261,42 @@ export async function resolvePublicSiteContext(
     }
   }
 
-  const configuredDefaultSite = await prisma.site.findFirst({
-    where: {
-      slug: env.DEFAULT_SITE_SLUG,
-      status: { not: "ARCHIVED" },
-      tenant: { slug: env.DEFAULT_TENANT_SLUG },
-    },
-    include: { tenant: true },
-  });
+  if (isLocalDevelopmentHost(host)) {
+    const configuredDefaultSite = await prisma.site.findFirst({
+      where: {
+        slug: env.DEFAULT_SITE_SLUG,
+        status: { not: "ARCHIVED" },
+        tenant: { slug: env.DEFAULT_TENANT_SLUG },
+      },
+      include: { tenant: true },
+    });
 
-  if (configuredDefaultSite) {
-    return {
-      tenantId: configuredDefaultSite.tenantId,
-      tenantSlug: configuredDefaultSite.tenant.slug,
-      siteId: configuredDefaultSite.id,
-      siteSlug: configuredDefaultSite.slug,
-    };
-  }
+    if (configuredDefaultSite) {
+      return {
+        tenantId: configuredDefaultSite.tenantId,
+        tenantSlug: configuredDefaultSite.tenant.slug,
+        siteId: configuredDefaultSite.id,
+        siteSlug: configuredDefaultSite.slug,
+      };
+    }
 
-  const fallbackDefaultSite = await prisma.site.findFirst({
-    where: {
-      isDefault: true,
-      status: { not: "ARCHIVED" },
-    },
-    include: { tenant: true },
-    orderBy: { createdAt: "asc" },
-  });
+    const fallbackDefaultSite = await prisma.site.findFirst({
+      where: {
+        isDefault: true,
+        status: { not: "ARCHIVED" },
+      },
+      include: { tenant: true },
+      orderBy: { createdAt: "asc" },
+    });
 
-  if (fallbackDefaultSite) {
-    return {
-      tenantId: fallbackDefaultSite.tenantId,
-      tenantSlug: fallbackDefaultSite.tenant.slug,
-      siteId: fallbackDefaultSite.id,
-      siteSlug: fallbackDefaultSite.slug,
-    };
+    if (fallbackDefaultSite) {
+      return {
+        tenantId: fallbackDefaultSite.tenantId,
+        tenantSlug: fallbackDefaultSite.tenant.slug,
+        siteId: fallbackDefaultSite.id,
+        siteSlug: fallbackDefaultSite.slug,
+      };
+    }
   }
 
   throw new Error("No public site could be resolved.");

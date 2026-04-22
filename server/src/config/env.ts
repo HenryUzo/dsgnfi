@@ -14,12 +14,15 @@ const envSchema = z.object({
   PORT: z.coerce.number().optional(),
 
   CORS_ORIGIN: z.string().min(1),
+  FRONTEND_ORIGIN: z.string().url().optional(),
+  BACKEND_ORIGIN: z.string().url().optional(),
 
   DATABASE_URL: z.string().min(1).optional(),
 
   JWT_SECRET: z.string().min(1),
 
   APP_BASE_DOMAIN: z.string().min(1).optional(),
+  UPLOADS_DIR: z.string().min(1).optional(),
   DEFAULT_TENANT_SLUG: z.string().min(1).default("dsgnfi"),
   DEFAULT_SITE_SLUG: z.string().min(1).default("main"),
   ALLOW_DEV_SITE_QUERY_OVERRIDE: boolFromString.default(true),

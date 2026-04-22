@@ -13,21 +13,31 @@ import { env } from "./config/env";
 import { prisma } from "./db/prisma";
 import { runtimeDebug } from "./debug/runtimeDebug";
 import authRouter from "./routes/auth";
+import assetsAdminRouter from "./routes/assetsAdmin";
+import auditAdminRouter from "./routes/auditAdmin";
 import cmsAdminRouter from "./routes/cmsAdmin";
 import cmsPublicRouter from "./routes/cmsPublic";
+import domainsAdminRouter from "./routes/domainsAdmin";
 import pagesAdminRouter from "./routes/pagesAdmin";
 import pagesPublicRouter from "./routes/pagesPublic";
 import processAdminRouter from "./routes/processAdmin";
 import processPublicRouter from "./routes/processPublic";
+import previewAdminRouter from "./routes/previewAdmin";
+import previewPublicRouter from "./routes/previewPublic";
+import sitePublicRouter from "./routes/sitePublic";
+import siteSettingsAdminRouter from "./routes/siteSettingsAdmin";
 import sitesAdminRouter from "./routes/sitesAdmin";
 import templatesAdminRouter from "./routes/templatesAdmin";
 import uploadsRouter from "./routes/uploads";
 import workAdminRouter from "./routes/workAdmin";
 import workPublicRouter from "./routes/workPublic";
+import { getReadinessStatus } from "./services/runtimeStatus";
 
 export function createApp() {
   const app = express();
-  const uploadsDir = path.resolve(process.cwd(), "uploads");
+  const uploadsDir = env.UPLOADS_DIR
+    ? path.resolve(env.UPLOADS_DIR)
+    : path.resolve(process.cwd(), "uploads");
   const logger = pino();
 
   fs.mkdirSync(uploadsDir, { recursive: true });
@@ -101,7 +111,16 @@ export function createApp() {
   app.use(pinoHttp({ logger }));
 
   app.get("/health", (_req: Request, res: Response) => {
-    res.json({ ok: true, service: "dsgnfi-cms-api" });
+    res.json({
+      ok: true,
+      service: "dsgnfi-cms-api",
+      environment: env.NODE_ENV,
+    });
+  });
+
+  app.get("/ready", async (_req: Request, res: Response) => {
+    const readiness = await getReadinessStatus(prisma);
+    return res.status(readiness.ok ? 200 : 503).json(readiness);
   });
 
   if (env.NODE_ENV === "development") {
@@ -114,22 +133,15 @@ export function createApp() {
   }
 
   app.get("/health/db", async (_req: Request, res: Response) => {
-    try {
-      await prisma.$queryRawUnsafe("SELECT 1");
-      res.json({
-        ok: true,
-        service: "dsgnfi-cms-api",
-        db: { ok: true },
-      });
-    } catch (error) {
-      logger.error({ err: error }, "Database health check failed");
-      res.status(503).json({
-        ok: false,
-        service: "dsgnfi-cms-api",
-        db: { ok: false },
-        error: { message: "Database unavailable" },
-      });
+    const readiness = await getReadinessStatus(prisma);
+    if (!readiness.ok) {
+      logger.error({ readiness }, "Database health check failed");
     }
+    res.status(readiness.checks.database === "ok" ? 200 : 503).json({
+      ok: readiness.checks.database === "ok",
+      service: readiness.service,
+      db: { ok: readiness.checks.database === "ok" },
+    });
   });
 
   app.use("/uploads", express.static(uploadsDir));
@@ -137,13 +149,20 @@ export function createApp() {
 
   app.use("/public", publicLimiter);
   app.use("/public/cms", cmsPublicRouter);
+  app.use("/public/site", sitePublicRouter);
+  app.use("/public/preview", previewPublicRouter);
   app.use("/public/pages", pagesPublicRouter);
   app.use("/public/work", workPublicRouter);
   app.use("/public/process", processPublicRouter);
 
   app.use("/admin", adminLimiter);
+  app.use("/admin/audit", auditAdminRouter);
   app.use("/admin/cms", cmsAdminRouter);
+  app.use("/admin/assets", assetsAdminRouter);
+  app.use("/admin/domains", domainsAdminRouter);
+  app.use("/admin/preview", previewAdminRouter);
   app.use("/admin/uploads", uploadsRouter);
+  app.use("/admin/site-settings", siteSettingsAdminRouter);
   app.use("/admin/templates", templatesAdminRouter);
   app.use("/admin/sites", sitesAdminRouter);
   app.use("/admin/pages", pagesAdminRouter);
