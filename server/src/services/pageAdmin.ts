@@ -6,8 +6,8 @@ import { ensureStarterPagesForSite, getSupportedPageForSite } from "./pageCatalo
 import {
   validatePageContent,
   validatePageDraftInput,
-  type PageDraftInput,
 } from "./pageValidation";
+import { writeAuditLog } from "./auditLog";
 
 function toJsonInput(value: unknown): Prisma.InputJsonValue {
   return value as Prisma.InputJsonValue;
@@ -277,6 +277,19 @@ export async function publishAdminPage(
     include: {
       currentDraftRevision: true,
       currentPublishedRevision: true,
+    },
+  });
+
+  await writeAuditLog(prisma, {
+    actorAdminUserId: options.adminId,
+    siteId: options.siteId,
+    action: "page.published",
+    entityType: "page",
+    entityId: updatedPage.id,
+    metadata: {
+      pageKey: options.pageKey,
+      publishedRevisionNumber: publishedRevision.revisionNumber,
+      publishedAt: publishedAt.toISOString(),
     },
   });
 

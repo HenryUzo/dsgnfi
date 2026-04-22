@@ -2,11 +2,9 @@ import { Router } from "express";
 
 import { prisma } from "../db/prisma";
 import { withPublicSiteContext } from "../middleware/withPublicSiteContext";
+import { getPublishedProcessForPublic } from "../services/processCompatibility";
 
 const router = Router();
-
-const PAGE_KEY = "process";
-const SECTION_KEY = "content";
 
 router.use(withPublicSiteContext);
 
@@ -19,15 +17,11 @@ router.get("/content", async (req, res) => {
     });
   }
 
-  const record = await prisma.cmsSection.findUnique({
-    where: {
-      siteId_page_section: { siteId, page: PAGE_KEY, section: SECTION_KEY },
-    },
-  });
+  const data = await getPublishedProcessForPublic(prisma, { siteId });
 
   return res.json({
     ok: true,
-    data: record?.status === "PUBLISHED" ? record.publishedData : null,
+    data,
   });
 });
 

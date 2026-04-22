@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
+    "bootstrap:local": "npm run prisma:generate && npm run prisma:migrate && npm run seed:admin && npm run seed:templates",
     "prisma:studio": "prisma studio",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
@@ -13,7 +14,8 @@
     "seed:work": "tsx src/scripts/seedWork.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "prisma generate && tsc -p tsconfig.json --noEmit"
+    "typecheck": "prisma generate && tsc -p tsconfig.json --noEmit",
+    "verify": "npm run typecheck && npm test"
   },
   "keywords": [],
   "author": "",

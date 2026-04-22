@@ -1,8 +1,9 @@
-﻿import { Router } from "express";
+import { Router } from "express";
 import { z } from "zod";
 
 import { prisma } from "../db/prisma";
 import { withPublicSiteContext } from "../middleware/withPublicSiteContext";
+import { getPublicCmsSection } from "../services/cmsPublicCompatibility";
 
 const router = Router();
 
@@ -35,18 +36,13 @@ router.get("/section", async (req, res) => {
   }
 
   const { page, section } = parsed.data;
-
-  const record = await prisma.cmsSection.findUnique({
-    where: { siteId_page_section: { siteId, page, section } },
-  });
-
-  const isPublished = record?.status === "PUBLISHED";
-
-  return res.json({
+  const data = await getPublicCmsSection(prisma, {
+    siteId,
     page,
     section,
-    data: isPublished ? record?.publishedData ?? null : null,
   });
+
+  return res.json({ page, section, data });
 });
 
 export default router;

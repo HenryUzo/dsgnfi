@@ -3,6 +3,12 @@ import { z } from "zod";
 
 import { prisma } from "../db/prisma";
 import { withPublicSiteContext } from "../middleware/withPublicSiteContext";
+import {
+  getPublicWorkMeta,
+  getPublicWorkProjectBySlug,
+  listPublicWorkProjectsBySite,
+  listPublicWorkTags,
+} from "../services/workPublic";
 
 const router = Router();
 
@@ -25,14 +31,7 @@ router.get("/meta", async (req, res) => {
     });
   }
 
-  const meta = await prisma.workPageMeta.findUnique({
-    where: { siteId_key: { siteId, key: "work" } },
-  });
-
-  return res.json({
-    title: meta?.titlePublished ?? "Our Work",
-    subtitle: meta?.subtitlePublished ?? "",
-  });
+  return res.json(await getPublicWorkMeta(prisma, siteId));
 });
 
 router.get("/tags", async (req, res) => {
@@ -44,19 +43,7 @@ router.get("/tags", async (req, res) => {
     });
   }
 
-  const tags = await prisma.workTag.findMany({
-    where: {
-      siteId,
-      projects: {
-        some: {
-          project: { status: "PUBLISHED", siteId },
-        },
-      },
-    },
-    orderBy: { name: "asc" },
-  });
-
-  return res.json({ tags });
+  return res.json({ tags: await listPublicWorkTags(prisma, siteId) });
 });
 
 router.get("/projects", async (req, res) => {
@@ -73,42 +60,11 @@ router.get("/projects", async (req, res) => {
     return res.status(400).json({ ok: false, error: { message: "Invalid query." } });
   }
 
-  const tagSlug = parsed.data.tag;
-
-  const projects = await prisma.workProject.findMany({
-    where: {
-      siteId,
-      status: "PUBLISHED",
-      ...(tagSlug
-        ? {
-            tags: {
-              some: {
-                tag: {
-                  slug: tagSlug,
-                  siteId,
-                },
-              },
-            },
-          }
-        : {}),
-    },
-    include: {
-      tags: {
-        include: { tag: true },
-      },
-    },
-    orderBy: { publishedAt: "desc" },
-  });
-
   return res.json({
-    projects: projects.map((project) => ({
-      id: project.id,
-      title: project.titlePublished ?? project.titleDraft,
-      slug: project.slugPublished ?? project.slugDraft,
-      excerpt: project.excerptPublished ?? project.excerptDraft,
-      coverImage: project.coverImagePublished ?? project.coverImageDraft,
-      tags: project.tags.map((item) => item.tag),
-    })),
+    projects: await listPublicWorkProjectsBySite(prisma, {
+      siteId,
+      tagSlug: parsed.data.tag,
+    }),
   });
 });
 
@@ -126,34 +82,16 @@ router.get("/projects/:slug", async (req, res) => {
     return res.status(400).json({ ok: false, error: { message: "Invalid slug." } });
   }
 
-  const project = await prisma.workProject.findFirst({
-    where: {
-      siteId,
-      status: "PUBLISHED",
-      slugPublished: parsed.data.slug,
-    },
-    include: {
-      tags: {
-        include: { tag: true },
-      },
-    },
+  const project = await getPublicWorkProjectBySlug(prisma, {
+    siteId,
+    slug: parsed.data.slug,
   });
 
   if (!project) {
     return res.status(404).json({ ok: false, error: { message: "Project not found." } });
   }
 
-  return res.json({
-    project: {
-      id: project.id,
-      title: project.titlePublished ?? project.titleDraft,
-      slug: project.slugPublished ?? project.slugDraft,
-      excerpt: project.excerptPublished ?? project.excerptDraft,
-      coverImage: project.coverImagePublished ?? project.coverImageDraft,
-      tags: project.tags.map((item) => item.tag),
-      content: project.publishedContent,
-    },
-  });
+  return res.json({ project });
 });
 
 export default router;

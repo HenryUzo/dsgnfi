@@ -2,6 +2,7 @@ import type { Prisma, PrismaClient, TemplateStatus } from "@prisma/client";
 
 import { getTemplateManifest, listTemplateManifests } from "../templates/registry";
 import type { StarterSiteSettings, TemplateManifest } from "../templates/types";
+import { buildNavigationDefaults } from "./sitePresentation";
 
 type TemplateRecord = Prisma.TemplateGetPayload<{
   include: {
@@ -195,6 +196,10 @@ export async function resolveTemplateSelection(
 
 export function buildSiteSettingsDefaults(manifest?: TemplateManifest | null) {
   const defaults: StarterSiteSettings = manifest?.starterSiteSettings ?? {};
+  const navigationDefaults = buildNavigationDefaults({
+    starterPrimary: manifest?.starterNavigation.primary ?? null,
+    supportedPages: manifest?.supportedPages ?? null,
+  });
 
   return {
     logoUrl: defaults.logoUrl ?? null,
@@ -207,6 +212,8 @@ export function buildSiteSettingsDefaults(manifest?: TemplateManifest | null) {
     seoTitle: defaults.seoTitle ?? null,
     seoDescription: defaults.seoDescription ?? null,
     theme: defaults.theme ? toJsonInput(defaults.theme) : undefined,
+    primaryNavigation: navigationDefaults.primaryNavigation,
+    footerNavigation: navigationDefaults.footerNavigation,
     locale: defaults.locale ?? null,
     timezone: defaults.timezone ?? null,
   };
