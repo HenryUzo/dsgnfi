@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { prisma } from "../db/prisma";
 import { requireAdmin } from "../middleware/requireAdmin";
+import { requireRole } from "../middleware/requireRole";
 import { withAdminSiteContext } from "../middleware/withAdminSiteContext";
 import {
   getAdminSiteSettings,
@@ -112,7 +113,7 @@ router.get("/", async (req, res) => {
   return res.json({ ok: true, site });
 });
 
-router.patch("/", async (req, res) => {
+router.patch("/", requireRole(["OWNER", "ADMIN"]), async (req, res) => {
   const siteId = getSiteId(req, res);
   const adminId = getAdminId(req, res);
   if (!siteId || !adminId) return;
@@ -145,7 +146,7 @@ router.get("/navigation", async (req, res) => {
   });
 });
 
-router.patch("/navigation", async (req, res) => {
+router.patch("/navigation", requireRole(["OWNER", "ADMIN"]), async (req, res) => {
   const siteId = getSiteId(req, res);
   const adminId = getAdminId(req, res);
   if (!siteId || !adminId) return;

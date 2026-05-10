@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from "express";
 
 import { prisma } from "../db/prisma";
 import { requireAdmin } from "../middleware/requireAdmin";
+import { requireRole } from "../middleware/requireRole";
 import { withAdminSiteContext } from "../middleware/withAdminSiteContext";
 import {
   getProcessDraftForAdmin,
@@ -52,7 +53,7 @@ router.get("/content", async (req, res) => {
   return res.json(payload);
 });
 
-router.put("/content", async (req, res) => {
+router.put("/content", requireRole(["OWNER", "ADMIN", "EDITOR"]), async (req, res) => {
   const siteId = getSiteId(req, res);
   const adminId = getAdminId(req, res);
   if (!siteId || adminId === null) return;
@@ -73,7 +74,7 @@ router.put("/content", async (req, res) => {
   return res.json({ ok: true, data: result.page.data });
 });
 
-router.post("/content/publish", async (req, res) => {
+router.post("/content/publish", requireRole(["OWNER", "ADMIN", "EDITOR"]), async (req, res) => {
   const siteId = getSiteId(req, res);
   const adminId = getAdminId(req, res);
   if (!siteId || adminId === null) return;

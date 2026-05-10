@@ -13,7 +13,7 @@ const envSchema = z.object({
 
   PORT: z.coerce.number().optional(),
 
-  CORS_ORIGIN: z.string().min(1),
+  CORS_ORIGIN: z.string().min(1).default("http://localhost:5174"),
   FRONTEND_ORIGIN: z.string().url().optional(),
   BACKEND_ORIGIN: z.string().url().optional(),
 

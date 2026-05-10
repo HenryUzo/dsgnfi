@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { prisma } from "../db/prisma";
 import { requireAdmin } from "../middleware/requireAdmin";
+import { requireRole } from "../middleware/requireRole";
 import { withAdminSiteContext } from "../middleware/withAdminSiteContext";
 import {
   createAdminAsset,
@@ -46,7 +47,7 @@ router.get("/", async (req, res) => {
   return res.json({ ok: true, assets });
 });
 
-router.post("/", upload.single("file"), async (req, res) => {
+router.post("/", requireRole(["OWNER", "ADMIN"]), upload.single("file"), async (req, res) => {
   const siteId = getSiteId(req, res);
   if (!siteId) return;
 
@@ -71,7 +72,7 @@ router.post("/", upload.single("file"), async (req, res) => {
   return res.status(201).json({ ok: true, asset });
 });
 
-router.patch("/:assetId", async (req, res) => {
+router.patch("/:assetId", requireRole(["OWNER", "ADMIN"]), async (req, res) => {
   const siteId = getSiteId(req, res);
   if (!siteId) return;
 
@@ -108,7 +109,7 @@ router.patch("/:assetId", async (req, res) => {
   return res.json({ ok: true, asset });
 });
 
-router.delete("/:assetId", async (req, res) => {
+router.delete("/:assetId", requireRole(["OWNER", "ADMIN"]), async (req, res) => {
   const siteId = getSiteId(req, res);
   if (!siteId) return;
 

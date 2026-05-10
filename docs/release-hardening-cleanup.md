@@ -119,7 +119,7 @@ npm run build
 
 Use these local URLs unless your ports differ:
 
-- frontend: `http://localhost:5173`
+- frontend: `http://localhost:5174`
 - backend: `http://localhost:4000`
 - admin login: `/admin/login`
 
@@ -130,7 +130,7 @@ Use the seeded admin account:
 
 ### 1. Public site presentation
 
-1. Open `http://localhost:5173/`
+1. Open `http://localhost:5174/`
 2. Confirm the header and footer render without crashing.
 3. In DevTools Network, inspect `GET http://localhost:4000/public/site`
 4. Expected status: `200`
@@ -183,26 +183,26 @@ curl.exe -i http://localhost:4000/public/site
 
 ### 3. Admin home deprecation surface
 
-1. Log in at `http://localhost:5173/admin/login`
-2. Open `http://localhost:5173/admin/pages/home`
+1. Log in at `http://localhost:5174/admin/login`
+2. Open `http://localhost:5174/admin/pages/home`
 3. Expected behavior:
    - legacy branding/theme controls are not the active editing surface
-   - the page clearly points admins to `http://localhost:5173/admin/site-settings`
+   - the page clearly points admins to `http://localhost:5174/admin/site-settings`
 
 ### 4. Site switching
 
-1. Open `http://localhost:5173/admin`
+1. Open `http://localhost:5174/admin`
 2. Use the site switcher in the admin header
 3. Switch between at least two sites
 4. Expected behavior:
    - current site label updates
    - admin screens reload without full-page breakage
-   - site-scoped pages like `http://localhost:5173/admin/site-settings`, `http://localhost:5173/admin/work`, and `http://localhost:5173/admin/process` reflect the newly selected site
+   - site-scoped pages like `http://localhost:5174/admin/site-settings`, `http://localhost:5174/admin/work`, and `http://localhost:5174/admin/process` reflect the newly selected site
 
 ### 5. Seeded templates
 
 1. In the browser or via API, open:
-   - `http://localhost:5173/admin/sites`
+   - `http://localhost:5174/admin/sites`
 2. Confirm templates are available in the create-site flow
 3. Or call:
 
@@ -215,7 +215,7 @@ curl.exe -s http://localhost:4000/admin/templates
 
 ### 6. Site settings, theme, navigation, and assets on two sites
 
-1. Open `http://localhost:5173/admin/site-settings`
+1. Open `http://localhost:5174/admin/site-settings`
 2. On Site A:
    - update tagline
    - update theme colors
@@ -230,11 +230,11 @@ curl.exe -s http://localhost:4000/admin/templates
 
 ### 7. Preview flow
 
-1. Open `http://localhost:5173/admin/site-settings`
+1. Open `http://localhost:5174/admin/site-settings`
 2. Go to the `Preview` tab
 3. Create a preview token for `home`
 4. Expected creation response in the UI:
-   - a browser URL like `http://localhost:5173/preview/pages/home?token=...`
+   - a browser URL like `http://localhost:5174/preview/pages/home?token=...`
    - not a backend URL on port `4000`
 5. Open the generated preview link
 6. Expected behavior:
@@ -275,13 +275,13 @@ curl.exe -i http://localhost:4000/public/pages/home
 ### 8. Process / work / public CMS compatibility
 
 1. Open:
-   - `http://localhost:5173/admin/process`
-   - `http://localhost:5173/admin/work`
+   - `http://localhost:5174/admin/process`
+   - `http://localhost:5174/admin/work`
 2. Make a small draft change and save where appropriate
 3. Switch sites and confirm state refreshes per site
 4. Open public pages:
-   - `http://localhost:5173/process`
-   - `http://localhost:5173/work`
+   - `http://localhost:5174/process`
+   - `http://localhost:5174/work`
 5. Expected behavior:
    - process public page uses published content only
    - work public list/details stay site-scoped
@@ -289,7 +289,7 @@ curl.exe -i http://localhost:4000/public/pages/home
 
 ### 9. Domain verification and primary switching
 
-1. Open `http://localhost:5173/admin/site-settings`
+1. Open `http://localhost:5174/admin/site-settings`
 2. Go to the `Domains` tab
 3. Add a custom domain
 4. Expected behavior:

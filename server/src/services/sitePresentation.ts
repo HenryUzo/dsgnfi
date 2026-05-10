@@ -184,7 +184,7 @@ export async function getSitePresentation(prisma: PrismaClient, siteId: string) 
       .map((item) => {
         if (item.pageKey) {
           const page = pageMap.get(item.pageKey);
-          if (!page) {
+          if (!page || !page.currentPublishedRevisionId) {
             return null;
           }
 

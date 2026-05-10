@@ -2,7 +2,7 @@
 server/.env
 app/.env.local
 .env
-.env.*.local
+.env.local
 
 # deps
 node_modules/

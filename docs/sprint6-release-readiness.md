@@ -22,6 +22,8 @@ Required for all environments:
 
 - `PORT`
 - `CORS_ORIGIN`
+  - defaults to `http://localhost:5174` for local development when unset
+  - should be explicit in staging/production
 - `DATABASE_URL`
 - `JWT_SECRET`
 

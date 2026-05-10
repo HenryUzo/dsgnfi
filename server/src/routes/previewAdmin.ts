@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { prisma } from "../db/prisma";
 import { requireAdmin } from "../middleware/requireAdmin";
+import { requireRole } from "../middleware/requireRole";
 import { withAdminSiteContext } from "../middleware/withAdminSiteContext";
 import {
   createPreviewToken,
@@ -51,7 +52,7 @@ router.get("/", async (req, res) => {
   return res.json({ ok: true, tokens });
 });
 
-router.post("/token", async (req, res) => {
+router.post("/token", requireRole(["OWNER", "ADMIN"]), async (req, res) => {
   const siteId = getSiteId(req, res);
   const adminId = getAdminId(req, res);
   if (!siteId || !adminId) return;
@@ -83,7 +84,7 @@ router.post("/token", async (req, res) => {
   return res.status(201).json({ ok: true, token: result.token });
 });
 
-router.delete("/:tokenId", async (req, res) => {
+router.delete("/:tokenId", requireRole(["OWNER", "ADMIN"]), async (req, res) => {
   const siteId = getSiteId(req, res);
   const adminId = getAdminId(req, res);
   if (!siteId || !adminId) return;

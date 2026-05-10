@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { prisma } from "../db/prisma";
 import { requireAdmin } from "../middleware/requireAdmin";
+import { requireRole } from "../middleware/requireRole";
 import { withAdminSiteContext } from "../middleware/withAdminSiteContext";
 import {
   createDomain,
@@ -57,7 +58,7 @@ router.get("/", async (req, res) => {
   return res.json({ ok: true, domains });
 });
 
-router.post("/", async (req, res) => {
+router.post("/", requireRole(["OWNER", "ADMIN"]), async (req, res) => {
   const siteId = getSiteId(req, res);
   const adminId = getAdminId(req, res);
   if (!siteId || !adminId) return;
@@ -96,7 +97,7 @@ router.post("/", async (req, res) => {
   return res.status(201).json({ ok: true, domain: result.domain });
 });
 
-router.post("/:domainId/verify", async (req, res) => {
+router.post("/:domainId/verify", requireRole(["OWNER", "ADMIN"]), async (req, res) => {
   const siteId = getSiteId(req, res);
   const adminId = getAdminId(req, res);
   if (!siteId || !adminId) return;
@@ -119,7 +120,7 @@ router.post("/:domainId/verify", async (req, res) => {
   return res.json({ ok: true, domain: result.domain });
 });
 
-router.post("/:domainId/set-primary", async (req, res) => {
+router.post("/:domainId/set-primary", requireRole(["OWNER", "ADMIN"]), async (req, res) => {
   const siteId = getSiteId(req, res);
   const adminId = getAdminId(req, res);
   if (!siteId || !adminId) return;
@@ -146,7 +147,7 @@ router.post("/:domainId/set-primary", async (req, res) => {
   return res.json({ ok: true, domain: result.domain });
 });
 
-router.delete("/:domainId", async (req, res) => {
+router.delete("/:domainId", requireRole(["OWNER", "ADMIN"]), async (req, res) => {
   const siteId = getSiteId(req, res);
   const adminId = getAdminId(req, res);
   if (!siteId || !adminId) return;

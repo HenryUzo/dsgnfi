@@ -2,7 +2,8 @@
   "private": true,
   "scripts": {
     "verify:server": "npm --prefix server run verify",
-    "verify:app": "npm --prefix app run verify"
+    "verify:app": "npm --prefix app run verify",
+    "scan:secrets": "node scripts/scan-secrets.js"
   },
   "dependencies": {
     "resend": "^6.9.2"

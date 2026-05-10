@@ -479,7 +479,7 @@ describe("Sprint 5A site presentation", () => {
     expect(publicNavResponse.body.navigation.primary[0].href).toBe("/work");
   });
 
-  it("keeps internal navigation items visible even when the referenced page is not published yet", async () => {
+  it("hides internal navigation items when the referenced page is not published yet", async () => {
     state.siteSettings[0].primaryNavigation = [
       { id: "nav-home", label: "Home", pageKey: "home", href: null, visible: true, order: 0 },
       { id: "nav-about", label: "About", pageKey: "about", href: null, visible: true, order: 1 },
@@ -493,10 +493,7 @@ describe("Sprint 5A site presentation", () => {
     const response = await request(app).get("/public/site/navigation");
 
     expect(response.status).toBe(200);
-    expect(response.body.navigation.primary).toEqual([
-      expect.objectContaining({ label: "Home", href: "/" }),
-      expect.objectContaining({ label: "About", href: "/about" }),
-    ]);
+    expect(response.body.navigation.primary).toEqual([]);
   });
 
   it("serves public site presentation per resolved site without leakage", async () => {

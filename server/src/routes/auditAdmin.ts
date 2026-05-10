@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { prisma } from "../db/prisma";
 import { requireAdmin } from "../middleware/requireAdmin";
+import { requireRole } from "../middleware/requireRole";
 import { withAdminSiteContext } from "../middleware/withAdminSiteContext";
 import { listRecentAuditLogs } from "../services/auditAdmin";
 
@@ -28,7 +29,7 @@ function getSiteId(req: Request, res: Response) {
 
 router.use(requireAdmin, withAdminSiteContext);
 
-router.get("/", async (req, res) => {
+router.get("/", requireRole(["OWNER", "ADMIN"]), async (req, res) => {
   const siteId = getSiteId(req, res);
   if (!siteId) return;
 

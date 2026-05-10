@@ -5,7 +5,6 @@ import express, { type NextFunction, type Request, type Response } from "express
 import fs from "fs";
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
-import path from "path";
 import pino from "pino";
 import pinoHttp from "pino-http";
 
@@ -32,22 +31,17 @@ import uploadsRouter from "./routes/uploads";
 import workAdminRouter from "./routes/workAdmin";
 import workPublicRouter from "./routes/workPublic";
 import { getReadinessStatus } from "./services/runtimeStatus";
+import { getUploadsDir } from "./services/uploadStorage";
 
 export function createApp() {
   const app = express();
-  const uploadsDir = env.UPLOADS_DIR
-    ? path.resolve(env.UPLOADS_DIR)
-    : path.resolve(process.cwd(), "uploads");
+  const uploadsDir = getUploadsDir();
   const logger = pino();
 
   fs.mkdirSync(uploadsDir, { recursive: true });
 
   // Stop 304/ETag caching behavior for an API (prevents fetch weirdness)
   app.set("etag", false);
-  app.use((_req, res, next) => {
-    res.setHeader("Cache-Control", "no-store");
-    next();
-  });
 
   app.use(express.json());
   app.use(cookieParser());
@@ -109,6 +103,25 @@ export function createApp() {
   });
 
   app.use(pinoHttp({ logger }));
+
+  app.use((req, res, next) => {
+    if (
+      req.path.startsWith("/admin") ||
+      req.path.startsWith("/auth") ||
+      req.path.startsWith("/public/preview")
+    ) {
+      res.setHeader("Cache-Control", "no-store");
+      return next();
+    }
+
+    if (req.path.startsWith("/public")) {
+      res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
+      return next();
+    }
+
+    res.setHeader("Cache-Control", "no-store");
+    return next();
+  });
 
   app.get("/health", (_req: Request, res: Response) => {
     res.json({
@@ -177,11 +190,16 @@ export function createApp() {
       (err as { status?: number; statusCode?: number }).status ??
       (err as { statusCode?: number }).statusCode ??
       500;
+    const isServerError = status >= 500;
+    const message = isServerError
+      ? "Internal Server Error"
+      : err.message || "Request failed";
 
     res.status(status).json({
       ok: false,
       error: {
-        message: err.message || "Internal Server Error",
+        code: isServerError ? "internal_error" : "request_failed",
+        message,
       },
     });
   });

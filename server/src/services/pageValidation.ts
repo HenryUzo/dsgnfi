@@ -6,6 +6,18 @@ import type {
 } from "../templates/types";
 
 const hrefSchema = z.string().min(1);
+const pageSlugSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .refine(
+    (value) =>
+      value === "/" ||
+      /^\/?[a-z0-9]+(?:-[a-z0-9]+)*(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)*$/.test(
+        value
+      ),
+    "Slug must be / or lowercase path segments using letters, numbers, and hyphens."
+  );
 
 const heroBlockSchema = z.object({
   id: z.string().min(1),
@@ -320,7 +332,7 @@ const contentSchema = z
 export const pageDraftInputSchema = z
   .object({
     title: z.string().min(1),
-    slug: z.string().min(1),
+    slug: pageSlugSchema,
     seoTitle: z.string().min(1).nullable().optional(),
     seoDescription: z.string().min(1).nullable().optional(),
     content: contentSchema,

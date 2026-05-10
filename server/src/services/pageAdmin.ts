@@ -47,6 +47,23 @@ async function getNextRevisionNumber(prisma: PrismaClient, pageId: string) {
   return (latestRevision?.revisionNumber ?? 0) + 1;
 }
 
+async function runInTransaction<T>(
+  prisma: PrismaClient,
+  callback: (tx: Prisma.TransactionClient) => Promise<T>
+) {
+  const maybePrisma = prisma as PrismaClient & {
+    $transaction?: <Result>(
+      txCallback: (tx: Prisma.TransactionClient) => Promise<Result>
+    ) => Promise<Result>;
+  };
+
+  if (typeof maybePrisma.$transaction === "function") {
+    return maybePrisma.$transaction(callback);
+  }
+
+  return callback(prisma as unknown as Prisma.TransactionClient);
+}
+
 async function getScopedPage(
   prisma: PrismaClient,
   siteId: string,
@@ -163,56 +180,64 @@ export async function saveAdminPageDraft(
     return { type: "validation_error" as const, error: validation.error };
   }
 
-  await ensureStarterPagesForSite(prisma, {
-    siteId: options.siteId,
-    adminId: options.adminId,
-  });
+  const updatedPage = await runInTransaction(prisma, async (tx) => {
+    const client = tx as unknown as PrismaClient;
 
-  const page = await prisma.page.findUnique({
-    where: {
-      siteId_pageKey: {
-        siteId: options.siteId,
-        pageKey: options.pageKey,
+    await ensureStarterPagesForSite(client, {
+      siteId: options.siteId,
+      adminId: options.adminId,
+    });
+
+    const page = await tx.page.findUnique({
+      where: {
+        siteId_pageKey: {
+          siteId: options.siteId,
+          pageKey: options.pageKey,
+        },
       },
-    },
-    include: {
-      currentDraftRevision: true,
-      currentPublishedRevision: true,
-    },
+      include: {
+        currentDraftRevision: true,
+        currentPublishedRevision: true,
+      },
+    });
+
+    if (!page) {
+      return null;
+    }
+
+    const nextRevisionNumber = await getNextRevisionNumber(client, page.id);
+    const revision = await tx.pageRevision.create({
+      data: {
+        pageId: page.id,
+        revisionNumber: nextRevisionNumber,
+        state: "DRAFT",
+        content: toJsonInput(validation.data.content),
+        schemaVersion: 1,
+        checksum: checksumForContent(validation.data.content),
+        createdBy: options.adminId,
+      },
+    });
+
+    return tx.page.update({
+      where: { id: page.id },
+      data: {
+        title: validation.data.title,
+        slug: validation.data.slug,
+        seoTitle: validation.data.seoTitle ?? null,
+        seoDescription: validation.data.seoDescription ?? null,
+        status: page.currentPublishedRevisionId ? page.status : "DRAFT",
+        currentDraftRevisionId: revision.id,
+      },
+      include: {
+        currentDraftRevision: true,
+        currentPublishedRevision: true,
+      },
+    });
   });
 
-  if (!page) {
+  if (!updatedPage) {
     return { type: "not_found" as const };
   }
-
-  const nextRevisionNumber = await getNextRevisionNumber(prisma, page.id);
-  const revision = await prisma.pageRevision.create({
-    data: {
-      pageId: page.id,
-      revisionNumber: nextRevisionNumber,
-      state: "DRAFT",
-      content: toJsonInput(validation.data.content),
-      schemaVersion: 1,
-      checksum: checksumForContent(validation.data.content),
-      createdBy: options.adminId,
-    },
-  });
-
-  const updatedPage = await prisma.page.update({
-    where: { id: page.id },
-    data: {
-      title: validation.data.title,
-      slug: validation.data.slug,
-      seoTitle: validation.data.seoTitle ?? null,
-      seoDescription: validation.data.seoDescription ?? null,
-      status: page.currentPublishedRevisionId ? page.status : "DRAFT",
-      currentDraftRevisionId: revision.id,
-    },
-    include: {
-      currentDraftRevision: true,
-      currentPublishedRevision: true,
-    },
-  });
 
   return {
     type: "success" as const,
@@ -243,55 +268,64 @@ export async function publishAdminPage(
     return { type: "not_found" as const };
   }
 
+  const draftRevision = page.currentDraftRevision;
   const validation = validatePageContent(
     pageDefinition,
-    page.currentDraftRevision.content
+    draftRevision.content
   );
 
   if (!validation.success) {
     return { type: "validation_error" as const, error: validation.error };
   }
 
-  const nextRevisionNumber = await getNextRevisionNumber(prisma, page.id);
   const publishedAt = new Date();
-  const publishedRevision = await prisma.pageRevision.create({
-    data: {
-      pageId: page.id,
-      revisionNumber: nextRevisionNumber,
-      state: "PUBLISHED",
-      content: toJsonInput(validation.data),
-      schemaVersion: page.currentDraftRevision.schemaVersion,
-      checksum: checksumForContent(validation.data),
-      createdBy: page.currentDraftRevision.createdBy ?? options.adminId,
-      publishedBy: options.adminId,
-      publishedAt,
-    },
-  });
+  const updatedPage = await runInTransaction(
+    prisma,
+    async (tx) => {
+      const client = tx as unknown as PrismaClient;
+      const nextRevisionNumber = await getNextRevisionNumber(client, page.id);
+      const publishedRevision = await tx.pageRevision.create({
+        data: {
+          pageId: page.id,
+          revisionNumber: nextRevisionNumber,
+          state: "PUBLISHED",
+          content: toJsonInput(validation.data),
+          schemaVersion: draftRevision.schemaVersion,
+          checksum: checksumForContent(validation.data),
+          createdBy: draftRevision.createdBy ?? options.adminId,
+          publishedBy: options.adminId,
+          publishedAt,
+        },
+      });
 
-  const updatedPage = await prisma.page.update({
-    where: { id: page.id },
-    data: {
-      status: "PUBLISHED",
-      currentPublishedRevisionId: publishedRevision.id,
-    },
-    include: {
-      currentDraftRevision: true,
-      currentPublishedRevision: true,
-    },
-  });
+      const updatedPage = await tx.page.update({
+        where: { id: page.id },
+        data: {
+          status: "PUBLISHED",
+          currentPublishedRevisionId: publishedRevision.id,
+        },
+        include: {
+          currentDraftRevision: true,
+          currentPublishedRevision: true,
+        },
+      });
 
-  await writeAuditLog(prisma, {
-    actorAdminUserId: options.adminId,
-    siteId: options.siteId,
-    action: "page.published",
-    entityType: "page",
-    entityId: updatedPage.id,
-    metadata: {
-      pageKey: options.pageKey,
-      publishedRevisionNumber: publishedRevision.revisionNumber,
-      publishedAt: publishedAt.toISOString(),
-    },
-  });
+      await writeAuditLog(client, {
+        actorAdminUserId: options.adminId,
+        siteId: options.siteId,
+        action: "page.published",
+        entityType: "page",
+        entityId: updatedPage.id,
+        metadata: {
+          pageKey: options.pageKey,
+          publishedRevisionNumber: publishedRevision.revisionNumber,
+          publishedAt: publishedAt.toISOString(),
+        },
+      });
+
+      return updatedPage;
+    }
+  );
 
   return {
     type: "success" as const,
@@ -386,28 +420,31 @@ export async function restoreAdminPageRevision(
     return { type: "validation_error" as const, error: validation.error };
   }
 
-  const nextRevisionNumber = await getNextRevisionNumber(prisma, page.id);
-  const restoredRevision = await prisma.pageRevision.create({
-    data: {
-      pageId: page.id,
-      revisionNumber: nextRevisionNumber,
-      state: "DRAFT",
-      content: toJsonInput(validation.data),
-      schemaVersion: revision.schemaVersion,
-      checksum: checksumForContent(validation.data),
-      createdBy: options.adminId,
-    },
-  });
+  const updatedPage = await runInTransaction(prisma, async (tx) => {
+    const client = tx as unknown as PrismaClient;
+    const nextRevisionNumber = await getNextRevisionNumber(client, page.id);
+    const restoredRevision = await tx.pageRevision.create({
+      data: {
+        pageId: page.id,
+        revisionNumber: nextRevisionNumber,
+        state: "DRAFT",
+        content: toJsonInput(validation.data),
+        schemaVersion: revision.schemaVersion,
+        checksum: checksumForContent(validation.data),
+        createdBy: options.adminId,
+      },
+    });
 
-  const updatedPage = await prisma.page.update({
-    where: { id: page.id },
-    data: {
-      currentDraftRevisionId: restoredRevision.id,
-    },
-    include: {
-      currentDraftRevision: true,
-      currentPublishedRevision: true,
-    },
+    return tx.page.update({
+      where: { id: page.id },
+      data: {
+        currentDraftRevisionId: restoredRevision.id,
+      },
+      include: {
+        currentDraftRevision: true,
+        currentPublishedRevision: true,
+      },
+    });
   });
 
   return {

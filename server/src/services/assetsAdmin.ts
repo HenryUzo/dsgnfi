@@ -3,6 +3,8 @@ import path from "path";
 
 import type { PrismaClient } from "@prisma/client";
 
+import { getUploadsDir } from "./uploadStorage";
+
 type AssetRecord = {
   id: string;
   siteId: string;
@@ -136,7 +138,7 @@ export async function deleteAdminAsset(
     }),
   ]);
 
-  const filePath = path.resolve(process.cwd(), "uploads", getFilenameFromUrl(asset.url));
+  const filePath = path.resolve(getUploadsDir(), getFilenameFromUrl(asset.url));
   await fs.unlink(filePath).catch(() => undefined);
 
   return true;
