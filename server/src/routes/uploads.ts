@@ -5,12 +5,14 @@ import multer from "multer";
 
 import { prisma } from "../db/prisma";
 import { requireAdmin } from "../middleware/requireAdmin";
+import { requireRole } from "../middleware/requireRole";
 import { withAdminSiteContext } from "../middleware/withAdminSiteContext";
 import { createAdminAsset } from "../services/assetsAdmin";
+import { getUploadsDir } from "../services/uploadStorage";
 
 const router = Router();
 
-const uploadDir = path.resolve(process.cwd(), "uploads");
+const uploadDir = getUploadsDir();
 
 const storage = multer.diskStorage({
   destination: uploadDir,
@@ -35,7 +37,7 @@ export const upload = multer({
   },
 });
 
-router.post("/", requireAdmin, withAdminSiteContext, upload.single("file"), async (req, res) => {
+router.post("/", requireAdmin, withAdminSiteContext, requireRole(["OWNER", "ADMIN"]), upload.single("file"), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({
       ok: false,

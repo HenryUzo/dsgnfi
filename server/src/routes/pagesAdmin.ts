@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { prisma } from "../db/prisma";
 import { requireAdmin } from "../middleware/requireAdmin";
+import { requireRole } from "../middleware/requireRole";
 import { withAdminSiteContext } from "../middleware/withAdminSiteContext";
 import {
   getAdminPageDraft,
@@ -91,7 +92,7 @@ router.get("/:pageKey/draft", async (req, res) => {
   return res.json({ ok: true, page });
 });
 
-router.put("/:pageKey/draft", async (req, res) => {
+router.put("/:pageKey/draft", requireRole(["OWNER", "ADMIN", "EDITOR"]), async (req, res) => {
   const siteId = getSiteId(req, res);
   const adminId = getAdminId(req, res);
   if (!siteId || !adminId) return;
@@ -128,7 +129,7 @@ router.put("/:pageKey/draft", async (req, res) => {
   return res.json({ ok: true, page: result.page });
 });
 
-router.post("/:pageKey/publish", async (req, res) => {
+router.post("/:pageKey/publish", requireRole(["OWNER", "ADMIN", "EDITOR"]), async (req, res) => {
   const siteId = getSiteId(req, res);
   const adminId = getAdminId(req, res);
   if (!siteId || !adminId) return;
@@ -191,7 +192,7 @@ router.get("/:pageKey/history", async (req, res) => {
   return res.json({ ok: true, revisions });
 });
 
-router.post("/:pageKey/restore/:revisionId", async (req, res) => {
+router.post("/:pageKey/restore/:revisionId", requireRole(["OWNER", "ADMIN", "EDITOR"]), async (req, res) => {
   const siteId = getSiteId(req, res);
   const adminId = getAdminId(req, res);
   if (!siteId || !adminId) return;

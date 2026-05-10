@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 
 import { prisma } from "../db/prisma";
 import { requireAdmin } from "../middleware/requireAdmin";
+import { requireRole } from "../middleware/requireRole";
 import { withAdminSiteContext } from "../middleware/withAdminSiteContext";
 
 const router = Router();
@@ -96,7 +97,7 @@ router.get("/section", async (req, res) => {
   });
 });
 
-router.put("/section", async (req, res) => {
+router.put("/section", requireRole(["OWNER", "ADMIN", "EDITOR"]), async (req, res) => {
   const siteId = req.context?.siteId;
   if (!siteId) {
     return res.status(500).json({
@@ -135,7 +136,7 @@ router.put("/section", async (req, res) => {
   return res.json({ ok: true });
 });
 
-router.post("/publish", async (req, res) => {
+router.post("/publish", requireRole(["OWNER", "ADMIN", "EDITOR"]), async (req, res) => {
   const siteId = req.context?.siteId;
   if (!siteId) {
     return res.status(500).json({

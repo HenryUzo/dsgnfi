@@ -4,7 +4,9 @@ import { z } from "zod";
 
 import { prisma } from "../db/prisma";
 import { requireAdmin } from "../middleware/requireAdmin";
+import { requireRole } from "../middleware/requireRole";
 import { withAdminSiteContext } from "../middleware/withAdminSiteContext";
+import { ApiRequestError, apiError, zodApiError } from "../services/apiErrors";
 import {
   createAdminSite,
   getAdminSiteDetail,
@@ -18,9 +20,10 @@ const paramsSchema = z.object({
 });
 
 const createSiteSchema = z.object({
-  name: z.string().min(1),
+  name: z.string().trim().min(1, "Site name is required."),
   slug: z
     .string()
+    .trim()
     .min(1)
     .regex(/^[a-z0-9-]+$/, "Slug must use lowercase letters, numbers, and hyphens."),
   templateKey: z.string().min(1).optional(),
@@ -32,7 +35,10 @@ function getTenantId(req: Request, res: Response) {
   if (!tenantId) {
     res.status(500).json({
       ok: false,
-      error: { message: "Missing admin tenant context." },
+      error: {
+        code: "admin_tenant_context_missing",
+        message: "Missing admin tenant context.",
+      },
     });
     return null;
   }
@@ -56,10 +62,7 @@ router.get("/:siteId", async (req, res) => {
 
   const parsed = paramsSchema.safeParse(req.params);
   if (!parsed.success) {
-    return res.status(400).json({
-      ok: false,
-      error: { message: "Invalid site id." },
-    });
+    return res.status(400).json(apiError("site_id_invalid", "Invalid site id."));
   }
 
   const site = await getAdminSiteDetail(prisma, {
@@ -70,23 +73,22 @@ router.get("/:siteId", async (req, res) => {
   if (!site) {
     return res.status(404).json({
       ok: false,
-      error: { message: "Site not found." },
+      error: { code: "site_not_found", message: "Site not found." },
     });
   }
 
   return res.json({ ok: true, site });
 });
 
-router.post("/", async (req, res) => {
+router.post("/", requireRole(["OWNER", "ADMIN"]), async (req, res) => {
   const tenantId = getTenantId(req, res);
   if (!tenantId) return;
 
   const parsed = createSiteSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({
-      ok: false,
-      error: { message: parsed.error.issues[0]?.message ?? "Invalid payload." },
-    });
+    return res
+      .status(400)
+      .json(zodApiError("site_validation_failed", parsed.error));
   }
 
   try {
@@ -101,7 +103,10 @@ router.post("/", async (req, res) => {
     if (!site) {
       return res.status(500).json({
         ok: false,
-        error: { message: "Failed to load created site." },
+        error: {
+          code: "site_create_invariant_failed",
+          message: "Failed to load created site.",
+        },
       });
     }
 
@@ -113,13 +118,26 @@ router.post("/", async (req, res) => {
     ) {
       return res.status(409).json({
         ok: false,
-        error: { message: "Site slug already exists for this tenant." },
+        error: {
+          code: "site_slug_conflict",
+          message: "Site slug already exists for this tenant.",
+          fieldErrors: {
+            slug: ["Site slug already exists for this tenant."],
+          },
+        },
       });
+    }
+
+    if (error instanceof ApiRequestError) {
+      return res
+        .status(error.statusCode)
+        .json(apiError(error.code, error.message, error.fieldErrors));
     }
 
     return res.status(500).json({
       ok: false,
       error: {
+        code: "site_create_failed",
         message:
           error instanceof Error ? error.message : "Unable to create site.",
       },

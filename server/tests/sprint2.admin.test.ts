@@ -546,6 +546,66 @@ describe("Sprint 2 admin routes", () => {
 
     expect(response.status).toBe(409);
     expect(response.body.error.message).toContain("Site slug already exists");
+    expect(response.body.error.code).toBe("site_slug_conflict");
+    expect(response.body.error.fieldErrors.slug[0]).toContain("Site slug already exists");
+  });
+
+  it("POST /admin/sites rejects invalid template selections without partial site writes", async () => {
+    setupAdminTenantContext();
+    setupTemplateBootstrapMocks();
+    mockPrisma.template.findUnique.mockResolvedValue(null);
+
+    const app = await createTestApp();
+    const token = signAdminToken({
+      id: "admin-1",
+      email: "admin@dsgnfi.com",
+      tenantId: "tenant-1",
+      siteId: "site-main",
+    });
+
+    const response = await request(app)
+      .post("/admin/sites")
+      .set("Cookie", [`cms_token=${token}`])
+      .send({
+        name: "Unknown Template Site",
+        slug: "unknown-template-site",
+        templateKey: "missing-template",
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe("site_template_invalid");
+    expect(response.body.error.fieldErrors.templateKey[0]).toContain("invalid");
+    expect(mockPrisma.site.create).not.toHaveBeenCalled();
+    expect(mockPrisma.siteSettings.create).not.toHaveBeenCalled();
+    expect(mockPrisma.workPageMeta.upsert).not.toHaveBeenCalled();
+  });
+
+  it("POST /admin/sites blocks editors from managing sites", async () => {
+    setupAdminTenantContext();
+    mockPrisma.membership.findFirst.mockResolvedValue({
+      tenantId: "tenant-1",
+      role: "EDITOR",
+    });
+
+    const app = await createTestApp();
+    const token = signAdminToken({
+      id: "editor-1",
+      email: "editor@dsgnfi.com",
+      tenantId: "tenant-1",
+      siteId: "site-main",
+    });
+
+    const response = await request(app)
+      .post("/admin/sites")
+      .set("Cookie", [`cms_token=${token}`])
+      .send({
+        name: "Blocked",
+        slug: "blocked",
+      });
+
+    expect(response.status).toBe(403);
+    expect(response.body.error.code).toBe("insufficient_role");
+    expect(mockPrisma.site.create).not.toHaveBeenCalled();
   });
 
   it("POST /admin/sites links template correctly when templateKey is provided", async () => {

@@ -49,7 +49,7 @@ beforeEach(() => {
 });
 
 describe("Sprint 1 multisite smoke", () => {
-  it("serves existing public CMS content from the default site", async () => {
+  it("does not fall back to the default site for unresolved non-local public hosts", async () => {
     const defaultSite = {
       id: "site-main",
       tenantId: "tenant-default",
@@ -78,11 +78,10 @@ describe("Sprint 1 multisite smoke", () => {
       .get("/public/cms/section?page=home&section=hero")
       .set("Host", "unknown.local");
 
-    expect(response.status).toBe(200);
-    expect(response.body.data).toEqual({ headline: "Default Hero" });
-    expect(mockPrisma.cmsSection.findUnique).toHaveBeenCalledWith({
-      where: { siteId_page_section: { siteId: "site-main", page: "home", section: "hero" } },
-    });
+    expect(response.status).toBe(404);
+    expect(response.body.ok).toBe(false);
+    expect(response.body.error.message).toBe("Site not found.");
+    expect(mockPrisma.cmsSection.findUnique).not.toHaveBeenCalled();
   });
 
   it("isolates public CMS content between site slugs", async () => {

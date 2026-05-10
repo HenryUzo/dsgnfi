@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { prisma } from "../db/prisma";
 import { requireAdmin } from "../middleware/requireAdmin";
+import { requireRole } from "../middleware/requireRole";
 import { withAdminSiteContext } from "../middleware/withAdminSiteContext";
 import {
   createAdminWorkProject,
@@ -87,7 +88,7 @@ router.get("/meta", async (req, res) => {
   return res.json(await getAdminWorkMeta(prisma, siteId));
 });
 
-router.put("/meta", async (req, res) => {
+router.put("/meta", requireRole(["OWNER", "ADMIN", "EDITOR"]), async (req, res) => {
   const siteId = getSiteId(req, res);
   if (!siteId) return;
 
@@ -103,7 +104,7 @@ router.put("/meta", async (req, res) => {
   return res.json({ ok: true });
 });
 
-router.post("/meta/publish", async (req, res) => {
+router.post("/meta/publish", requireRole(["OWNER", "ADMIN", "EDITOR"]), async (req, res) => {
   const siteId = getSiteId(req, res);
   if (!siteId) return;
 
@@ -118,7 +119,7 @@ router.get("/tags", async (req, res) => {
   return res.json({ tags: await listAdminWorkTags(prisma, siteId) });
 });
 
-router.post("/tags", async (req, res) => {
+router.post("/tags", requireRole(["OWNER", "ADMIN", "EDITOR"]), async (req, res) => {
   const siteId = getSiteId(req, res);
   if (!siteId) return;
 
@@ -141,7 +142,7 @@ router.post("/tags", async (req, res) => {
   return res.status(201).json({ tag: result.tag });
 });
 
-router.patch("/tags/:id", async (req, res) => {
+router.patch("/tags/:id", requireRole(["OWNER", "ADMIN", "EDITOR"]), async (req, res) => {
   const siteId = getSiteId(req, res);
   if (!siteId) return;
 
@@ -178,7 +179,7 @@ router.patch("/tags/:id", async (req, res) => {
   return res.json({ tag: result.tag });
 });
 
-router.delete("/tags/:id", async (req, res) => {
+router.delete("/tags/:id", requireRole(["OWNER", "ADMIN", "EDITOR"]), async (req, res) => {
   const siteId = getSiteId(req, res);
   if (!siteId) return;
 
@@ -233,7 +234,7 @@ router.get("/projects/:id", async (req, res) => {
   return res.json({ project });
 });
 
-router.post("/projects", async (req, res) => {
+router.post("/projects", requireRole(["OWNER", "ADMIN", "EDITOR"]), async (req, res) => {
   const siteId = getSiteId(req, res);
   if (!siteId) return;
 
@@ -263,7 +264,7 @@ router.post("/projects", async (req, res) => {
   return res.status(201).json({ project: result.project });
 });
 
-router.put("/projects/:id", async (req, res) => {
+router.put("/projects/:id", requireRole(["OWNER", "ADMIN", "EDITOR"]), async (req, res) => {
   const siteId = getSiteId(req, res);
   if (!siteId) return;
 
@@ -307,7 +308,7 @@ router.put("/projects/:id", async (req, res) => {
   return res.json({ project: result.project });
 });
 
-router.post("/projects/:id/publish", async (req, res) => {
+router.post("/projects/:id/publish", requireRole(["OWNER", "ADMIN", "EDITOR"]), async (req, res) => {
   const siteId = getSiteId(req, res);
   if (!siteId) return;
 
@@ -345,7 +346,7 @@ router.post("/projects/:id/publish", async (req, res) => {
   return res.json({ ok: true });
 });
 
-router.post("/projects/:id/duplicate", async (req, res) => {
+router.post("/projects/:id/duplicate", requireRole(["OWNER", "ADMIN", "EDITOR"]), async (req, res) => {
   const siteId = getSiteId(req, res);
   if (!siteId) return;
 

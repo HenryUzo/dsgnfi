@@ -162,7 +162,18 @@ router.post("/login", async (req, res) => {
 
   const { email, password } = parsed.data;
 
-  const user = await prisma.adminUser.findUnique({ where: { email } });
+  let user;
+  try {
+    user = await prisma.adminUser.findUnique({ where: { email } });
+  } catch {
+    return res.status(503).json({
+      ok: false,
+      error: {
+        code: "auth_unavailable",
+        message: "Authentication service is unavailable. Check database connection.",
+      },
+    });
+  }
   if (!user) {
     return res.status(401).json({
       ok: false,

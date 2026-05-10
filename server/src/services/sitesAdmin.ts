@@ -6,6 +6,7 @@ import {
   resolveTemplateSelection,
 } from "./templateCatalog";
 import { ensureStarterPagesForSite } from "./pageCatalog";
+import { ApiRequestError } from "./apiErrors";
 
 type SiteWithRelations = Prisma.SiteGetPayload<{
   include: {
@@ -110,47 +111,75 @@ export async function createAdminSite(
     templateVersion?: string | null;
   }
 ) {
-  await ensureTemplateCatalog(prisma);
+  const runCreate = async (tx: Prisma.TransactionClient) => {
+    const client = tx as unknown as PrismaClient;
 
-  const templateSelection = await resolveTemplateSelection(prisma, {
-    templateKey: options.templateKey ?? null,
-    templateVersion: options.templateVersion ?? null,
-  });
+    await ensureTemplateCatalog(client);
 
-  const site = await prisma.site.create({
-    data: {
-      tenantId: options.tenantId,
-      name: options.name,
-      slug: options.slug,
-      status: "DRAFT",
-      isDefault: false,
-      templateId: templateSelection?.template.id,
-      templateVersionId: templateSelection?.version.id,
-    },
-    include: {
-      template: true,
-      templateVersion: true,
-      settings: true,
-    },
-  });
+    const templateSelection = await resolveTemplateSelection(client, {
+      templateKey: options.templateKey ?? null,
+      templateVersion: options.templateVersion ?? null,
+    });
 
-  await prisma.siteSettings.create({
-    data: {
-      siteId: site.id,
-      ...buildSiteSettingsDefaults(templateSelection?.manifest),
-    },
-  });
+    if ((options.templateKey || options.templateVersion) && !templateSelection) {
+      throw new ApiRequestError(
+        400,
+        "site_template_invalid",
+        "Selected template is invalid or inactive.",
+        {
+          templateKey: ["Selected template is invalid or inactive."],
+        }
+      );
+    }
 
-  await prisma.workPageMeta.upsert({
-    where: { siteId_key: { siteId: site.id, key: "work" } },
-    update: {},
-    create: { siteId: site.id, key: "work" },
-  });
+    const site = await tx.site.create({
+      data: {
+        tenantId: options.tenantId,
+        name: options.name.trim(),
+        slug: options.slug,
+        status: "DRAFT",
+        isDefault: false,
+        templateId: templateSelection?.template.id,
+        templateVersionId: templateSelection?.version.id,
+      },
+      include: {
+        template: true,
+        templateVersion: true,
+        settings: true,
+      },
+    });
 
-  await ensureStarterPagesForSite(prisma, { siteId: site.id });
+    await tx.siteSettings.create({
+      data: {
+        siteId: site.id,
+        ...buildSiteSettingsDefaults(templateSelection?.manifest),
+      },
+    });
+
+    await tx.workPageMeta.upsert({
+      where: { siteId_key: { siteId: site.id, key: "work" } },
+      update: {},
+      create: { siteId: site.id, key: "work" },
+    });
+
+    await ensureStarterPagesForSite(client, { siteId: site.id });
+
+    return site.id;
+  };
+
+  const maybePrisma = prisma as PrismaClient & {
+    $transaction?: <T>(
+      callback: (tx: Prisma.TransactionClient) => Promise<T>
+    ) => Promise<T>;
+  };
+
+  const siteId =
+    typeof maybePrisma.$transaction === "function"
+      ? await maybePrisma.$transaction(runCreate)
+      : await runCreate(prisma as unknown as Prisma.TransactionClient);
 
   return getAdminSiteDetail(prisma, {
     tenantId: options.tenantId,
-    siteId: site.id,
+    siteId,
   });
 }
