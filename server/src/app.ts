@@ -12,10 +12,12 @@ import { env } from "./config/env";
 import { prisma } from "./db/prisma";
 import { runtimeDebug } from "./debug/runtimeDebug";
 import authRouter from "./routes/auth";
+import adminAiRouter from "./routes/adminAi";
 import assetsAdminRouter from "./routes/assetsAdmin";
 import auditAdminRouter from "./routes/auditAdmin";
 import cmsAdminRouter from "./routes/cmsAdmin";
 import cmsPublicRouter from "./routes/cmsPublic";
+import contactPublicRouter from "./routes/contactPublic";
 import domainsAdminRouter from "./routes/domainsAdmin";
 import pagesAdminRouter from "./routes/pagesAdmin";
 import pagesPublicRouter from "./routes/pagesPublic";
@@ -43,7 +45,7 @@ export function createApp() {
   // Stop 304/ETag caching behavior for an API (prevents fetch weirdness)
   app.set("etag", false);
 
-  app.use(express.json());
+  app.use(express.json({ limit: "12mb" }));
   app.use(cookieParser());
 
   if (env.NODE_ENV === "development") {
@@ -162,6 +164,7 @@ export function createApp() {
 
   app.use("/public", publicLimiter);
   app.use("/public/cms", cmsPublicRouter);
+  app.use("/public/contact", contactPublicRouter);
   app.use("/public/site", sitePublicRouter);
   app.use("/public/preview", previewPublicRouter);
   app.use("/public/pages", pagesPublicRouter);
@@ -169,6 +172,7 @@ export function createApp() {
   app.use("/public/process", processPublicRouter);
 
   app.use("/admin", adminLimiter);
+  app.use("/admin/ai", adminAiRouter);
   app.use("/admin/audit", auditAdminRouter);
   app.use("/admin/cms", cmsAdminRouter);
   app.use("/admin/assets", assetsAdminRouter);

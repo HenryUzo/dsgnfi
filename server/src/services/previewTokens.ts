@@ -65,6 +65,10 @@ export async function createPreviewToken(
     now,
     Math.max(5, Math.min(options.expiresInMinutes ?? DEFAULT_PREVIEW_TTL_MINUTES, 24 * 60))
   );
+  const site = await prisma.site.findUnique({
+    where: { id: options.siteId },
+    select: { slug: true },
+  });
 
   const token = await prisma.previewToken.create({
     data: {
@@ -78,7 +82,7 @@ export async function createPreviewToken(
   });
 
   const pageSegment = pageKey ?? "home";
-  const previewUrl = buildPreviewBrowserUrl(options.baseUrl, pageSegment, rawToken);
+  const previewUrl = buildPreviewBrowserUrl(options.baseUrl, pageSegment, rawToken, site?.slug ?? null);
 
   await writeAuditLog(prisma, {
     actorAdminUserId: options.adminId,
@@ -102,7 +106,7 @@ export async function createPreviewToken(
       note: token.note,
       createdAt: token.createdAt,
       previewUrl,
-      previewApiPath: buildPreviewApiPath(pageSegment, rawToken),
+      previewApiPath: buildPreviewApiPath(pageSegment, rawToken, site?.slug ?? null),
       token: rawToken,
     },
   };
@@ -240,16 +244,25 @@ export function getPreviewBaseUrl(req: { protocol: string; get(name: string): st
   return baseDomain ? `https://${baseDomain}` : "http://localhost:5173";
 }
 
-export function buildPreviewBrowserPath(pageKey: string, rawToken: string) {
-  const query = new URLSearchParams({ token: rawToken }).toString();
+function buildPreviewQuery(rawToken: string, siteSlug?: string | null) {
+  const query = new URLSearchParams({ token: rawToken });
+  const normalizedSiteSlug = siteSlug?.trim();
+  if (normalizedSiteSlug && normalizedSiteSlug !== "main") {
+    query.set("site", normalizedSiteSlug);
+  }
+  return query.toString();
+}
+
+export function buildPreviewBrowserPath(pageKey: string, rawToken: string, siteSlug?: string | null) {
+  const query = buildPreviewQuery(rawToken, siteSlug);
   return `/preview/pages/${encodeURIComponent(pageKey)}?${query}`;
 }
 
-export function buildPreviewApiPath(pageKey: string, rawToken: string) {
-  const query = new URLSearchParams({ token: rawToken }).toString();
+export function buildPreviewApiPath(pageKey: string, rawToken: string, siteSlug?: string | null) {
+  const query = buildPreviewQuery(rawToken, siteSlug);
   return `/public/preview/pages/${encodeURIComponent(pageKey)}?${query}`;
 }
 
-export function buildPreviewBrowserUrl(baseUrl: string, pageKey: string, rawToken: string) {
-  return `${baseUrl}${buildPreviewBrowserPath(pageKey, rawToken)}`;
+export function buildPreviewBrowserUrl(baseUrl: string, pageKey: string, rawToken: string, siteSlug?: string | null) {
+  return `${baseUrl}${buildPreviewBrowserPath(pageKey, rawToken, siteSlug)}`;
 }

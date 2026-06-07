@@ -6,17 +6,18 @@ export type TemplateCategory =
   | "property"
   | "logistics";
 
-export type PageKey = "home" | "about" | "contact" | "process" | "work";
+export const SYSTEM_PAGE_KEYS = [
+  "home",
+  "about",
+  "contact",
+  "process",
+  "work",
+] as const;
 
-export type PageBlockType =
-  | "hero"
-  | "richText"
-  | "features"
-  | "faq"
-  | "cta"
-  | "contact"
-  | "stats"
-  | "gallery";
+export type SystemPageKey = (typeof SYSTEM_PAGE_KEYS)[number];
+export type PageKey = string;
+
+export type PageBlockType = string;
 
 export type PageBlockInput = {
   id: string;
@@ -24,11 +25,33 @@ export type PageBlockInput = {
   data: Record<string, unknown>;
 };
 
+export type TemplateNavigationPresetItem =
+  | string
+  | {
+      label: string;
+      pageKey?: PageKey | null;
+      href?: string | null;
+      visible?: boolean;
+    };
+
 export type SupportedPageDefinition = {
   pageKey: PageKey;
   title: string;
   slug: string;
   isRequired: boolean;
+  allowedBlockTypes: PageBlockType[];
+  defaultBlocks: PageBlockInput[];
+  seoDefaults?: {
+    seoTitle?: string;
+    seoDescription?: string;
+  };
+};
+
+export type AddablePageTemplateDefinition = {
+  templateKey: string;
+  label: string;
+  description: string;
+  defaultTitle: string;
   allowedBlockTypes: PageBlockType[];
   defaultBlocks: PageBlockInput[];
   seoDefaults?: {
@@ -52,6 +75,37 @@ export type StarterSiteSettings = {
   faviconUrl?: string | null;
 };
 
+export type TemplateStarterContentHints = {
+  homeSections: string[];
+  workEnabled: boolean;
+  processEnabled: boolean;
+};
+
+export type SupportedPageOverride = {
+  pageKey: PageKey;
+  title?: string;
+  slug?: string;
+  isRequired?: boolean;
+  allowedBlockTypes?: PageBlockType[];
+  defaultBlocks?: PageBlockInput[];
+  seoDefaults?: {
+    seoTitle?: string | null;
+    seoDescription?: string | null;
+  };
+};
+
+export type TemplatePresetOverrides = {
+  starterSiteSettings?: StarterSiteSettings;
+  starterNavigation?: {
+    primary?: TemplateNavigationPresetItem[];
+    footer?: TemplateNavigationPresetItem[];
+  };
+  starterContentHints?: Partial<TemplateStarterContentHints>;
+  replaceSupportedPages?: boolean;
+  supportedPages?: SupportedPageOverride[];
+  importProvenance?: Record<string, unknown>;
+};
+
 export type TemplateManifest = {
   key: string;
   version: "1.0.0";
@@ -60,13 +114,11 @@ export type TemplateManifest = {
   description: string;
   starterSiteSettings: StarterSiteSettings;
   starterNavigation: {
-    primary: string[];
+    primary: TemplateNavigationPresetItem[];
+    footer?: TemplateNavigationPresetItem[];
   };
-  starterContentHints: {
-    homeSections: string[];
-    workEnabled: boolean;
-    processEnabled: boolean;
-  };
+  starterContentHints: TemplateStarterContentHints;
   editableFieldGroups: string[];
   supportedPages: SupportedPageDefinition[];
+  addablePageTemplates?: AddablePageTemplateDefinition[];
 };

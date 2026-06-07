@@ -1,12 +1,9 @@
 import { z } from "zod";
 
-import type {
-  PageBlockType,
-  SupportedPageDefinition,
-} from "../templates/types";
+import type { PageBlockType, SupportedPageDefinition } from "../templates/types";
 
 const hrefSchema = z.string().min(1);
-const pageSlugSchema = z
+export const pageSlugSchema = z
   .string()
   .trim()
   .min(1)
@@ -26,6 +23,8 @@ const heroBlockSchema = z.object({
     .object({
       headline: z.string().min(1),
       subheadline: z.string().min(1).optional(),
+      backgroundImage: z.string().min(1).optional(),
+      backgroundImageAlt: z.string().optional(),
       primaryCtaLabel: z.string().min(1).optional(),
       primaryCtaHref: hrefSchema.optional(),
     })
@@ -312,16 +311,11 @@ const processCtaBlockSchema = z.object({
     .strict(),
 });
 
-const blockSchema = z.discriminatedUnion("type", [
-  heroBlockSchema,
-  richTextBlockSchema,
-  featuresBlockSchema,
-  faqBlockSchema,
-  ctaBlockSchema,
-  contactBlockSchema,
-  statsBlockSchema,
-  galleryBlockSchema,
-]);
+const blockSchema = z.object({
+  id: z.string().min(1),
+  type: z.string().min(1),
+  data: z.record(z.string(), z.unknown()),
+});
 
 const contentSchema = z
   .object({
@@ -341,6 +335,21 @@ export const pageDraftInputSchema = z
 
 export type PageDraftInput = z.infer<typeof pageDraftInputSchema>;
 export type PageContentInput = PageDraftInput["content"];
+
+export const pageCreateInputSchema = z
+  .object({
+    templateKey: z.string().min(1),
+    title: z.string().trim().min(1),
+    slug: pageSlugSchema,
+    seoTitle: z.string().trim().min(1).nullable().optional(),
+    seoDescription: z.string().trim().min(1).nullable().optional(),
+    isVisible: z.boolean().optional(),
+    hierarchyRole: z.enum(["MAIN", "INNER"]).optional(),
+    defaultParentPageKey: z.string().trim().min(1).nullable().optional(),
+  })
+  .strict();
+
+export type PageCreateInput = z.infer<typeof pageCreateInputSchema>;
 
 const processCompatibilityBlockSchema = z.discriminatedUnion("type", [
   processHeroAtticSaltBlockSchema,
@@ -392,6 +401,10 @@ export function validatePageDraftInput(
   }
 
   return parsed;
+}
+
+export function validatePageCreateInput(payload: unknown) {
+  return pageCreateInputSchema.safeParse(payload);
 }
 
 export function validatePageContent(

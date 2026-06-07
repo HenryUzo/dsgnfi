@@ -1,12 +1,13 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 
 import { listSupportedPagesForSite } from "./pageCatalog";
-import { getTemplateManifest } from "../templates/registry";
 import {
   buildNavigationDefaults,
   normalizeNavigationItems,
 } from "./sitePresentation";
 import { writeAuditLog } from "./auditLog";
+import { getEffectiveTemplateManifest } from "./templateCatalog";
+import { toPageHierarchyPayload } from "./pageHierarchy";
 
 function toJsonInput(value: unknown): Prisma.InputJsonValue {
   return value as Prisma.InputJsonValue;
@@ -31,12 +32,22 @@ export async function ensureSiteSettings(prisma: PrismaClient, siteId: string) {
 
   const supportedPages = await listSupportedPagesForSite(prisma, siteId);
   const manifest =
-    (site.templateVersion?.manifestKey
-      ? getTemplateManifest(site.templateVersion.manifestKey)
-      : null) ??
-    (site.template?.key ? getTemplateManifest(site.template.key) : null);
+    site.template
+      ? getEffectiveTemplateManifest(
+          {
+            ...site.template,
+            versions: site.templateVersion
+              ? [
+                  site.templateVersion,
+                ]
+              : [],
+          },
+          { useDraft: false }
+        )
+      : null;
   const navigationDefaults = buildNavigationDefaults({
     starterPrimary: manifest?.starterNavigation.primary ?? null,
+    starterFooter: manifest?.starterNavigation.footer ?? null,
     supportedPages,
   });
 
@@ -69,12 +80,25 @@ export async function getAdminSiteSettings(prisma: PrismaClient, siteId: string)
   await ensureSiteSettings(prisma, siteId);
   const site = await prisma.site.findUnique({
     where: { id: siteId },
-    include: { settings: true },
+    include: {
+      settings: true,
+      pages: {
+        select: {
+          pageKey: true,
+          title: true,
+          slug: true,
+          hierarchyRole: true,
+          defaultParentPageKey: true,
+        },
+      },
+    },
   });
 
   if (!site) {
     return null;
   }
+
+  const pageMap = new Map(site.pages.map((page) => [page.pageKey, page]));
 
   return {
     site: {
@@ -97,6 +121,15 @@ export async function getAdminSiteSettings(prisma: PrismaClient, siteId: string)
       timezone: site.settings?.timezone ?? null,
     },
     theme: (site.settings?.theme as Record<string, unknown> | null) ?? {},
+    pages: site.pages.map((page) => ({
+      pageKey: page.pageKey,
+      title: page.title,
+      slug: page.slug,
+      hierarchy: toPageHierarchyPayload(
+        page,
+        page.defaultParentPageKey ? pageMap.get(page.defaultParentPageKey) ?? null : null
+      ),
+    })),
     navigation: {
       primary: normalizeNavigationItems(
         Array.isArray(site.settings?.primaryNavigation)

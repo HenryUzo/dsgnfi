@@ -11,6 +11,7 @@ import {
   createAdminSite,
   getAdminSiteDetail,
   listAdminSites,
+  updateAdminSiteTemplate,
 } from "../services/sitesAdmin";
 
 const router = Router();
@@ -28,6 +29,11 @@ const createSiteSchema = z.object({
     .regex(/^[a-z0-9-]+$/, "Slug must use lowercase letters, numbers, and hyphens."),
   templateKey: z.string().min(1).optional(),
   templateVersion: z.string().min(1).optional(),
+});
+
+const updateSiteTemplateSchema = z.object({
+  templateKey: z.string().trim().min(1, "Choose a template."),
+  templateVersion: z.string().trim().min(1).optional(),
 });
 
 function getTenantId(req: Request, res: Response) {
@@ -140,6 +146,59 @@ router.post("/", requireRole(["OWNER", "ADMIN"]), async (req, res) => {
         code: "site_create_failed",
         message:
           error instanceof Error ? error.message : "Unable to create site.",
+      },
+    });
+  }
+});
+
+router.patch("/:siteId/template", requireRole(["OWNER", "ADMIN"]), async (req, res) => {
+  const tenantId = getTenantId(req, res);
+  if (!tenantId) return;
+
+  const parsedParams = paramsSchema.safeParse(req.params);
+  if (!parsedParams.success) {
+    return res.status(400).json(apiError("site_id_invalid", "Invalid site id."));
+  }
+
+  const parsedBody = updateSiteTemplateSchema.safeParse(req.body);
+  if (!parsedBody.success) {
+    return res
+      .status(400)
+      .json(zodApiError("site_template_validation_failed", parsedBody.error));
+  }
+
+  try {
+    const site = await updateAdminSiteTemplate(prisma, {
+      tenantId,
+      siteId: parsedParams.data.siteId,
+      templateKey: parsedBody.data.templateKey,
+      templateVersion: parsedBody.data.templateVersion ?? null,
+    });
+
+    if (!site) {
+      return res.status(500).json({
+        ok: false,
+        error: {
+          code: "site_template_update_invariant_failed",
+          message: "Failed to load updated site.",
+        },
+      });
+    }
+
+    return res.json({ ok: true, site });
+  } catch (error) {
+    if (error instanceof ApiRequestError) {
+      return res
+        .status(error.statusCode)
+        .json(apiError(error.code, error.message, error.fieldErrors));
+    }
+
+    return res.status(500).json({
+      ok: false,
+      error: {
+        code: "site_template_update_failed",
+        message:
+          error instanceof Error ? error.message : "Unable to update site template.",
       },
     });
   }

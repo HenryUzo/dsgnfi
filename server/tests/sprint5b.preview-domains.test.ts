@@ -3,7 +3,8 @@ import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 process.env.NODE_ENV = "development";
-process.env.CORS_ORIGIN = "http://localhost:3000,http://localhost:5173";
+process.env.CORS_ORIGIN = "http://localhost:3000,http://localhost:5174";
+process.env.FRONTEND_ORIGIN = "http://localhost:5174";
 process.env.JWT_SECRET = "test_jwt_secret";
 process.env.DEFAULT_TENANT_SLUG = "dsgnfi";
 process.env.DEFAULT_SITE_SLUG = "main";
@@ -42,6 +43,9 @@ const mockPrisma = {
     findUnique: vi.fn(),
     findFirst: vi.fn(),
     update: vi.fn(),
+  },
+  cmsSection: {
+    findUnique: vi.fn(),
   },
   page: {
     findUnique: vi.fn(),
@@ -208,6 +212,17 @@ function setupMocks() {
     return clone(token);
   });
 
+  mockPrisma.cmsSection.findUnique.mockImplementation(async (args: any) =>
+    clone(
+      state.cmsSections.find(
+        (entry: any) =>
+          entry.siteId === args.where.siteId_page_section.siteId &&
+          entry.page === args.where.siteId_page_section.page &&
+          entry.section === args.where.siteId_page_section.section
+      ) ?? null
+    )
+  );
+
   mockPrisma.siteDomain.findMany.mockImplementation(async (args: any) =>
     clone(
       state.domains
@@ -367,6 +382,17 @@ describe("Sprint 5B preview and domain management", () => {
           publishedAt: new Date("2026-04-07T08:00:00.000Z").toISOString(),
         },
       ],
+      cmsSections: [
+        {
+          siteId: "site-main",
+          page: "home",
+          section: "hero",
+          draftData: { headline: "Draft Hero CMS" },
+          publishedData: { headline: "Published Hero CMS" },
+          status: "PUBLISHED",
+          publishedAt: new Date("2026-04-07T08:15:00.000Z").toISOString(),
+        },
+      ],
       previewTokens: [],
       domains: [
         {
@@ -419,7 +445,7 @@ describe("Sprint 5B preview and domain management", () => {
     expect(createResponse.status).toBe(201);
     expect(createResponse.body.token.token).toBeTruthy();
     expect(createResponse.body.token.previewUrl).toContain(
-      "http://localhost:5173/preview/pages/home?token="
+      "http://localhost:5174/preview/pages/home?token="
     );
     expect(createResponse.body.token.previewApiPath).toContain("/public/preview/pages/home?token=");
 
@@ -441,6 +467,25 @@ describe("Sprint 5B preview and domain management", () => {
     expect(
       state.auditLogs.some((entry: any) => entry.action === "preview_token.created")
     ).toBe(true);
+  });
+
+  it("serves draft legacy CMS sections through the preview endpoint", async () => {
+    const app = await createTestApp();
+    const cookie = `cms_token=${signAdminToken("site-main")}`;
+
+    const createResponse = await request(app)
+      .post("/admin/preview/token")
+      .set("Cookie", cookie)
+      .send({ pageKey: "home", note: "Homepage QA", expiresInMinutes: 60 });
+
+    const previewResponse = await request(app).get(
+      `/public/preview/cms/section?page=home&section=hero&token=${encodeURIComponent(
+        createResponse.body.token.token
+      )}`
+    );
+
+    expect(previewResponse.status).toBe(200);
+    expect(previewResponse.body.data.headline).toBe("Draft Hero CMS");
   });
 
   it("rejects revoked and expired preview tokens", async () => {

@@ -1,4 +1,7 @@
-import { buildStarterSupportedPages } from "../pageDefaults";
+import {
+  buildStarterAddablePageTemplates,
+  buildStarterSupportedPages,
+} from "../pageDefaults";
 import type { TemplateManifest } from "../types";
 
 export const logisticsStarterManifest: TemplateManifest = {
@@ -32,4 +35,5 @@ export const logisticsStarterManifest: TemplateManifest = {
     processEnabled: true,
     workEnabled: false,
   }),
+  addablePageTemplates: buildStarterAddablePageTemplates("logistics"),
 };

@@ -1,4 +1,6 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
+import type { TemplateNavigationPresetItem } from "../templates/types";
+import { toPageHierarchyPayload } from "./pageHierarchy";
 
 export type SiteNavigationItemInput = {
   id: string;
@@ -94,7 +96,8 @@ export async function validateNavigationItems(
 }
 
 export function buildNavigationDefaults(options: {
-  starterPrimary?: string[] | null;
+  starterPrimary?: TemplateNavigationPresetItem[] | null;
+  starterFooter?: TemplateNavigationPresetItem[] | null;
   supportedPages?: Array<{ pageKey: string; title: string; slug: string }> | null;
 }) {
   const pagesByKey = new Map(
@@ -104,37 +107,61 @@ export function buildNavigationDefaults(options: {
     (options.supportedPages ?? []).map((page) => [page.title.toLowerCase(), page])
   );
 
-  const primary = (options.starterPrimary ?? [])
-    .map((label, index) => {
-      const normalized = label.trim().toLowerCase();
-      const page =
-        pagesByKey.get(normalized) ??
-        pagesByTitle.get(normalized) ??
-        [...pagesByKey.values()].find((entry) => entry.pageKey === normalized);
+  const resolvePresetItem = (
+    item: TemplateNavigationPresetItem,
+    index: number,
+    prefix: "primary" | "footer"
+  ) => {
+    const preset =
+      typeof item === "string"
+        ? { label: item, pageKey: null, href: null, visible: true }
+        : {
+            label: item.label,
+            pageKey: item.pageKey ?? null,
+            href: item.href ?? null,
+            visible: item.visible ?? true,
+          };
 
-      return {
-        id: `primary-${index + 1}`,
-        label,
-        pageKey: page?.pageKey ?? null,
-        href: page ? slugToHref(page.slug) : `/${normalized.replace(/\s+/g, "-")}`,
-        visible: true,
-        order: index,
-      };
-    })
+    const normalized = preset.label.trim().toLowerCase();
+    const page =
+      (preset.pageKey ? pagesByKey.get(preset.pageKey) : null) ??
+      pagesByKey.get(normalized) ??
+      pagesByTitle.get(normalized) ??
+      [...pagesByKey.values()].find((entry) => entry.pageKey === normalized);
+
+    return {
+      id: `${prefix}-${index + 1}`,
+      label: preset.label,
+      pageKey: page?.pageKey ?? preset.pageKey ?? null,
+      href:
+        page?.slug
+          ? slugToHref(page.slug)
+          : preset.href ?? `/${normalized.replace(/\s+/g, "-")}`,
+      visible: preset.visible,
+      order: index,
+    };
+  };
+
+  const primary = (options.starterPrimary ?? [])
+    .map((item, index) => resolvePresetItem(item, index, "primary"))
     .filter((item) => item.label.length > 0);
 
-  const footerCandidates = ["home", "about", "work", "process", "contact"];
-  const footer = footerCandidates
-    .map((pageKey, index) => pagesByKey.get(pageKey))
-    .filter((page): page is { pageKey: string; title: string; slug: string } => Boolean(page))
-    .map((page, index) => ({
-      id: `footer-${index + 1}`,
-      label: page.title,
-      pageKey: page.pageKey,
-      href: slugToHref(page.slug),
-      visible: true,
-      order: index,
-    }));
+  const footer =
+    options.starterFooter && options.starterFooter.length > 0
+      ? options.starterFooter
+          .map((item, index) => resolvePresetItem(item, index, "footer"))
+          .filter((item) => item.label.length > 0)
+      : ["home", "about", "work", "process", "contact"]
+          .map((pageKey, index) => pagesByKey.get(pageKey))
+          .filter((page): page is { pageKey: string; title: string; slug: string } => Boolean(page))
+          .map((page, index) => ({
+            id: `footer-${index + 1}`,
+            label: page.title,
+            pageKey: page.pageKey,
+            href: slugToHref(page.slug),
+            visible: true,
+            order: index,
+          }));
 
   return {
     primaryNavigation: toJsonInput(primary),
@@ -150,8 +177,12 @@ export async function getSitePresentation(prisma: PrismaClient, siteId: string) 
       pages: {
         select: {
           pageKey: true,
+          title: true,
           slug: true,
           currentPublishedRevisionId: true,
+          isVisible: true,
+          hierarchyRole: true,
+          defaultParentPageKey: true,
         },
       },
     },
@@ -163,6 +194,9 @@ export async function getSitePresentation(prisma: PrismaClient, siteId: string) 
 
   const pageMap = new Map(
     site.pages.map((page) => [page.pageKey, page])
+  );
+  const publishedVisiblePages = site.pages.filter(
+    (page) => page.currentPublishedRevisionId && page.isVisible
   );
 
   const resolveNavigation = (
@@ -184,7 +218,7 @@ export async function getSitePresentation(prisma: PrismaClient, siteId: string) 
       .map((item) => {
         if (item.pageKey) {
           const page = pageMap.get(item.pageKey);
-          if (!page || !page.currentPublishedRevisionId) {
+          if (!page || !page.currentPublishedRevisionId || !page.isVisible) {
             return null;
           }
 
@@ -241,6 +275,15 @@ export async function getSitePresentation(prisma: PrismaClient, siteId: string) 
       timezone: settings?.timezone ?? null,
     },
     theme: (settings?.theme as Record<string, unknown> | null) ?? {},
+    pages: publishedVisiblePages.map((page) => ({
+      pageKey: page.pageKey,
+      title: page.title,
+      slug: slugToHref(page.slug),
+      hierarchy: toPageHierarchyPayload(
+        page,
+        page.defaultParentPageKey ? pageMap.get(page.defaultParentPageKey) ?? null : null
+      ),
+    })),
     navigation: {
       primary: resolveNavigation(settings?.primaryNavigation),
       footer: resolveNavigation(settings?.footerNavigation),
@@ -259,6 +302,7 @@ export function toPublicSiteResponse(
     site: presentation.site,
     settings: presentation.settings,
     theme: presentation.theme,
+    pages: presentation.pages,
     navigation: presentation.navigation,
   };
 }
