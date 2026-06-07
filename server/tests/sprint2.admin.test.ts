@@ -13,7 +13,7 @@ process.env.DATABASE_URL ??= "postgresql://test:test@localhost:5432/test";
 
 const mockPrisma = {
   siteDomain: { findFirst: vi.fn() },
-  site: { findFirst: vi.fn(), findUnique: vi.fn(), findMany: vi.fn(), create: vi.fn() },
+  site: { findFirst: vi.fn(), findUnique: vi.fn(), findMany: vi.fn(), create: vi.fn(), groupBy: vi.fn() },
   siteSettings: { create: vi.fn() },
   page: { findUnique: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn() },
   pageRevision: { create: vi.fn(), findFirst: vi.fn(), findMany: vi.fn() },
@@ -33,7 +33,7 @@ const mockPrisma = {
   workProjectTag: { count: vi.fn(), upsert: vi.fn() },
   adminUser: { findUnique: vi.fn() },
   tenant: { upsert: vi.fn() },
-  template: { upsert: vi.fn(), findMany: vi.fn(), findUnique: vi.fn() },
+  template: { upsert: vi.fn(), findMany: vi.fn(), findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
   templateVersion: { updateMany: vi.fn(), upsert: vi.fn() },
   $queryRawUnsafe: vi.fn(),
 };
@@ -71,6 +71,14 @@ function setupTemplateBootstrapMocks() {
     category: args.create?.category ?? args.update?.category ?? "agency",
     description: args.create?.description ?? args.update?.description ?? "",
     status: "ACTIVE",
+    sourceType: "STARTER",
+    tenantId: null,
+    baseTemplateKey: null,
+    createdBy: null,
+    draftName: null,
+    draftCategory: null,
+    draftDescription: null,
+    draftPresetOverrides: null,
   }));
 
   mockPrisma.templateVersion.updateMany.mockResolvedValue({ count: 0 });
@@ -80,6 +88,8 @@ function setupTemplateBootstrapMocks() {
     version: args.where.templateId_version.version,
     manifestKey: args.create?.manifestKey ?? args.update?.manifestKey ?? "agency-starter",
     isActive: true,
+    presetOverrides: null,
+    createdAt: new Date("2026-04-01T00:00:00.000Z"),
   }));
 }
 
@@ -269,6 +279,8 @@ function setupAdminTenantContext() {
     },
   ]);
 
+  mockPrisma.site.groupBy.mockResolvedValue([]);
+
   return { mainSite, branchSite, foreignSite };
 }
 
@@ -280,6 +292,7 @@ beforeEach(() => {
   mockPrisma.site.findUnique.mockResolvedValue(null);
   mockPrisma.site.findMany.mockResolvedValue([]);
   mockPrisma.site.create.mockResolvedValue(null);
+  mockPrisma.site.groupBy.mockResolvedValue([]);
   mockPrisma.siteSettings.create.mockResolvedValue(null);
   mockPrisma.membership.findMany.mockResolvedValue([]);
   mockPrisma.membership.findFirst.mockResolvedValue(null);
@@ -301,6 +314,8 @@ beforeEach(() => {
   mockPrisma.template.findMany.mockResolvedValue([]);
   mockPrisma.template.findUnique.mockResolvedValue(null);
   mockPrisma.template.upsert.mockResolvedValue(null);
+  mockPrisma.template.create.mockResolvedValue(null);
+  mockPrisma.template.update.mockResolvedValue(null);
   mockPrisma.templateVersion.updateMany.mockResolvedValue({ count: 0 });
   mockPrisma.templateVersion.upsert.mockResolvedValue(null);
 });
@@ -361,7 +376,25 @@ describe("Sprint 2 admin routes", () => {
         category: "agency",
         description: "Agency template",
         status: "ACTIVE",
-        versions: [{ id: "v1", version: "1.0.0", manifestKey: "agency-starter", isActive: true }],
+        sourceType: "STARTER",
+        tenantId: null,
+        baseTemplateKey: null,
+        createdBy: null,
+        draftName: null,
+        draftCategory: null,
+        draftDescription: null,
+        draftPresetOverrides: null,
+        tenant: null,
+        versions: [
+          {
+            id: "v1",
+            version: "1.0.0",
+            manifestKey: "agency-starter",
+            isActive: true,
+            presetOverrides: null,
+            createdAt: new Date("2026-04-01T00:00:00.000Z"),
+          },
+        ],
       },
     ]);
 
@@ -395,12 +428,23 @@ describe("Sprint 2 admin routes", () => {
       category: "healthcare",
       description: "Clinic template",
       status: "ACTIVE",
+      sourceType: "STARTER",
+      tenantId: null,
+      baseTemplateKey: null,
+      createdBy: null,
+      draftName: null,
+      draftCategory: null,
+      draftDescription: null,
+      draftPresetOverrides: null,
+      tenant: null,
       versions: [
         {
           id: "version-clinic",
           version: "1.0.0",
           manifestKey: "clinic-starter",
           isActive: true,
+          presetOverrides: null,
+          createdAt: new Date("2026-04-01T00:00:00.000Z"),
         },
       ],
     });
@@ -471,12 +515,22 @@ describe("Sprint 2 admin routes", () => {
       category: "healthcare",
       description: "Clinic template",
       status: "ACTIVE",
+      sourceType: "STARTER",
+      tenantId: null,
+      baseTemplateKey: null,
+      createdBy: null,
+      draftName: null,
+      draftCategory: null,
+      draftDescription: null,
+      draftPresetOverrides: null,
       versions: [
         {
           id: "template-version-clinic-starter",
           version: "1.0.0",
           manifestKey: "clinic-starter",
           isActive: true,
+          presetOverrides: null,
+          createdAt: new Date("2026-04-01T00:00:00.000Z"),
         },
       ],
     });
@@ -618,12 +672,22 @@ describe("Sprint 2 admin routes", () => {
       category: "agency",
       description: "Agency template",
       status: "ACTIVE",
+      sourceType: "STARTER",
+      tenantId: null,
+      baseTemplateKey: null,
+      createdBy: null,
+      draftName: null,
+      draftCategory: null,
+      draftDescription: null,
+      draftPresetOverrides: null,
       versions: [
         {
           id: "template-version-agency",
           version: "1.0.0",
           manifestKey: "agency-starter",
           isActive: true,
+          presetOverrides: null,
+          createdAt: new Date("2026-04-01T00:00:00.000Z"),
         },
       ],
     });

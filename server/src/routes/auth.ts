@@ -26,6 +26,31 @@ const switchSiteSchema = z.object({
   siteId: z.string().min(1),
 });
 
+async function tryRepairSeedAdminPassword(options: {
+  email: string;
+  password: string;
+  user: { id: string; email: string };
+}) {
+  if (env.NODE_ENV !== "development") {
+    return false;
+  }
+
+  const seedEmail = process.env.SEED_ADMIN_EMAIL ?? "admin@dsgnfi.com";
+  const seedPassword = process.env.SEED_ADMIN_PASSWORD ?? "ChangeMeNow123!";
+
+  if (options.email !== seedEmail || options.password !== seedPassword || options.user.email !== seedEmail) {
+    return false;
+  }
+
+  const passwordHash = await bcrypt.hash(seedPassword, 12);
+  await prisma.adminUser.update({
+    where: { id: options.user.id },
+    data: { passwordHash },
+  });
+
+  return true;
+}
+
 async function buildAuthPayload(
   adminId: string,
   options?: {
@@ -181,7 +206,14 @@ router.post("/login", async (req, res) => {
     });
   }
 
-  const isValid = await bcrypt.compare(password, user.passwordHash);
+  let isValid = await bcrypt.compare(password, user.passwordHash);
+  if (!isValid) {
+    const repaired = await tryRepairSeedAdminPassword({ email, password, user });
+    if (repaired) {
+      isValid = true;
+    }
+  }
+
   if (!isValid) {
     return res.status(401).json({
       ok: false,

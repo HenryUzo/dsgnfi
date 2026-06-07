@@ -40,6 +40,11 @@ enum TemplateStatus {
   INACTIVE
 }
 
+enum TemplateSourceType {
+  STARTER
+  CUSTOM
+}
+
 enum PageStatus {
   DRAFT
   PUBLISHED
@@ -48,6 +53,23 @@ enum PageStatus {
 enum PageRevisionState {
   DRAFT
   PUBLISHED
+  ARCHIVED
+}
+
+enum PageTemplateLineageStatus {
+  UNTRACKED
+  INHERITED
+  MODIFIED
+}
+
+enum PageHierarchyRole {
+  MAIN
+  INNER
+}
+
+enum ContactSubmissionStatus {
+  NEW
+  REVIEWED
   ARCHIVED
 }
 
@@ -61,6 +83,7 @@ model AdminUser {
   publishedPageRevisions PageRevision[] @relation("PageRevisionPublishedBy")
   previewTokens PreviewToken[]
   auditLogs     AuditLog[] @relation("AuditLogActor")
+  createdTemplates Template[] @relation("TemplateCreatedBy")
 }
 
 model Tenant {
@@ -71,6 +94,7 @@ model Tenant {
   updatedAt   DateTime     @updatedAt
   sites       Site[]
   memberships Membership[]
+  templates   Template[]
 }
 
 model Site {
@@ -97,6 +121,7 @@ model Site {
   assets       Asset[]
   previewTokens PreviewToken[]
   auditLogs    AuditLog[]
+  contactSubmissions ContactSubmission[]
 
   @@unique([tenantId, slug])
   @@index([tenantId])
@@ -174,28 +199,45 @@ model AuditLog {
 }
 
 model Template {
-  id          String            @id @default(uuid()) @db.Uuid
-  key         String            @unique
-  name        String
-  category    String
-  description String
-  status      TemplateStatus    @default(ACTIVE)
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
-  versions    TemplateVersion[]
-  sites       Site[]
+  id                  String             @id @default(uuid()) @db.Uuid
+  tenantId            String?            @db.Uuid
+  key                 String             @unique
+  sourceType          TemplateSourceType @default(STARTER)
+  baseTemplateKey     String?
+  name                String
+  category            String
+  description         String
+  status              TemplateStatus     @default(ACTIVE)
+  createdBy           String?            @db.Uuid
+  draftName           String?
+  draftCategory       String?
+  draftDescription    String?
+  draftPresetOverrides Json?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  tenant              Tenant?            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdByUser       AdminUser?         @relation("TemplateCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  versions            TemplateVersion[]
+  sites               Site[]
+  sourcePages         Page[] @relation("PageSourceTemplate")
+
+  @@index([tenantId])
+  @@index([sourceType])
+  @@index([tenantId, sourceType])
 }
 
 model TemplateVersion {
-  id           String      @id @default(uuid()) @db.Uuid
-  templateId   String      @db.Uuid
-  version      String
-  isActive     Boolean     @default(true)
-  manifestKey  String
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
-  template     Template    @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  sites        Site[]
+  id              String   @id @default(uuid()) @db.Uuid
+  templateId      String   @db.Uuid
+  version         String
+  isActive        Boolean  @default(true)
+  manifestKey     String
+  presetOverrides Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  template        Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  sites           Site[]
+  sourcePages     Page[] @relation("PageSourceTemplateVersion")
 
   @@unique([templateId, version])
   @@index([templateId])
@@ -224,6 +266,25 @@ model SiteSettings {
   site           Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
 }
 
+model ContactSubmission {
+  id        String                  @id @default(uuid()) @db.Uuid
+  siteId    String                  @db.Uuid
+  status    ContactSubmissionStatus @default(NEW)
+  firstName String?
+  lastName  String?
+  email     String
+  company   String
+  jobTitle  String?
+  message   String
+  pagePath  String?
+  userAgent String?
+  createdAt DateTime                @default(now())
+  site      Site                    @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([siteId, status, createdAt])
+  @@index([siteId, createdAt])
+}
+
 model Asset {
   id        String   @id @default(uuid()) @db.Uuid
   siteId    String   @db.Uuid
@@ -243,6 +304,15 @@ model Page {
   id                       String        @id @default(uuid()) @db.Uuid
   siteId                   String        @db.Uuid
   pageKey                  String
+  pageTemplateKey          String?
+  sourceTemplateId         String?       @db.Uuid
+  sourceTemplateVersionId  String?       @db.Uuid
+  sourcePageBlueprintKey   String?
+  lineageStatus            PageTemplateLineageStatus @default(UNTRACKED)
+  hierarchyRole            PageHierarchyRole @default(MAIN)
+  defaultParentPageKey     String?
+  allowedBlockTypes        Json?
+  isVisible                Boolean       @default(true)
   slug                     String
   title                    String
   status                   PageStatus    @default(DRAFT)
@@ -253,6 +323,8 @@ model Page {
   createdAt                DateTime      @default(now())
   updatedAt                DateTime      @updatedAt
   site                     Site          @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  sourceTemplate           Template?     @relation("PageSourceTemplate", fields: [sourceTemplateId], references: [id], onDelete: SetNull)
+  sourceTemplateVersion    TemplateVersion? @relation("PageSourceTemplateVersion", fields: [sourceTemplateVersionId], references: [id], onDelete: SetNull)
   revisions                PageRevision[] @relation("PageRevisions")
   currentDraftRevision     PageRevision? @relation("CurrentDraftRevision", fields: [currentDraftRevisionId], references: [id], onDelete: SetNull)
   currentPublishedRevision PageRevision? @relation("CurrentPublishedRevision", fields: [currentPublishedRevisionId], references: [id], onDelete: SetNull)
@@ -260,6 +332,8 @@ model Page {
   @@unique([siteId, pageKey])
   @@unique([siteId, slug])
   @@index([siteId, status])
+  @@index([sourceTemplateId])
+  @@index([sourceTemplateVersionId])
 }
 
 model PageRevision {

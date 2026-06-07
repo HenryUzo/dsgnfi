@@ -1,0 +1,745 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>React to CMS Template Developer Guideline</title>
+    <style>
+      :root {
+        --bg: #f5efe4;
+        --panel: rgba(255, 251, 244, 0.92);
+        --panel-strong: #fffaf2;
+        --text: #15120f;
+        --muted: #6d655d;
+        --line: #d8cdc0;
+        --accent: #f4511e;
+        --accent-soft: rgba(244, 81, 30, 0.12);
+        --ok: #0f766e;
+        --warn: #b45309;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background:
+          radial-gradient(circle at top right, rgba(244, 81, 30, 0.12), transparent 30%),
+          linear-gradient(180deg, #f8f3ea 0%, #eee4d5 100%);
+        color: var(--text);
+        font-family: Georgia, "Times New Roman", serif;
+      }
+
+      body {
+        padding: 40px 18px 80px;
+      }
+
+      .page {
+        margin: 0 auto;
+        max-width: 1200px;
+      }
+
+      .hero,
+      .section {
+        border: 1px solid var(--line);
+        background: var(--panel);
+      }
+
+      .hero {
+        padding: 40px;
+      }
+
+      .eyebrow {
+        margin: 0;
+        color: var(--accent);
+        font: 700 12px/1.2 Arial, Helvetica, sans-serif;
+        letter-spacing: 0.28em;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3 {
+        margin: 0;
+        font-weight: 500;
+        letter-spacing: -0.035em;
+      }
+
+      h1 {
+        max-width: 930px;
+        margin-top: 18px;
+        font-size: clamp(42px, 6vw, 84px);
+        line-height: 0.95;
+      }
+
+      .hero-copy {
+        max-width: 840px;
+        margin-top: 18px;
+        color: var(--muted);
+        font: 400 20px/1.65 Arial, Helvetica, sans-serif;
+      }
+
+      .hero-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+        margin-top: 28px;
+      }
+
+      .metric {
+        padding: 18px;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.55);
+      }
+
+      .metric-label {
+        color: var(--muted);
+        font: 700 11px/1.2 Arial, Helvetica, sans-serif;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+      }
+
+      .metric-value {
+        margin-top: 10px;
+        font-size: 28px;
+        line-height: 1.1;
+      }
+
+      .section {
+        margin-top: 26px;
+        padding: 28px;
+      }
+
+      .section-title {
+        font-size: clamp(28px, 3vw, 44px);
+        line-height: 0.98;
+      }
+
+      .section-copy {
+        max-width: 900px;
+        margin-top: 12px;
+        color: var(--muted);
+        font: 400 16px/1.65 Arial, Helvetica, sans-serif;
+      }
+
+      .cards {
+        display: grid;
+        gap: 16px;
+        margin-top: 22px;
+      }
+
+      .cards.two {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .cards.three {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .card {
+        padding: 18px;
+        border: 1px solid var(--line);
+        background: var(--panel-strong);
+      }
+
+      .card h3 {
+        font-size: 24px;
+        line-height: 1.04;
+      }
+
+      .card p,
+      .card li {
+        color: var(--muted);
+        font: 400 14px/1.65 Arial, Helvetica, sans-serif;
+      }
+
+      .card ul,
+      .card ol {
+        margin: 12px 0 0;
+        padding-left: 18px;
+      }
+
+      .rule-list {
+        display: grid;
+        gap: 12px;
+        margin-top: 20px;
+      }
+
+      .rule {
+        display: grid;
+        grid-template-columns: 180px minmax(0, 1fr);
+        gap: 18px;
+        padding: 16px;
+        border: 1px solid var(--line);
+        background: #fff;
+      }
+
+      .rule-name {
+        color: var(--accent);
+        font: 700 12px/1.2 Arial, Helvetica, sans-serif;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+      }
+
+      .rule-body {
+        color: var(--muted);
+        font: 400 14px/1.65 Arial, Helvetica, sans-serif;
+      }
+
+      .table {
+        width: 100%;
+        margin-top: 18px;
+        border-collapse: collapse;
+        background: #fff;
+      }
+
+      .table th,
+      .table td {
+        padding: 14px 12px;
+        border: 1px solid var(--line);
+        text-align: left;
+        vertical-align: top;
+      }
+
+      .table th {
+        font: 700 12px/1.2 Arial, Helvetica, sans-serif;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      .table td {
+        font: 400 14px/1.6 Arial, Helvetica, sans-serif;
+      }
+
+      .code {
+        margin-top: 18px;
+        padding: 18px;
+        overflow-x: auto;
+        border: 1px solid var(--line);
+        background: #171411;
+        color: #f5efe5;
+        font: 400 13px/1.65 "Courier New", Courier, monospace;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 6px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: #fff;
+        color: var(--muted);
+        font: 700 11px/1 Arial, Helvetica, sans-serif;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .ok {
+        color: var(--ok);
+        font-weight: 700;
+      }
+
+      .warn {
+        color: var(--warn);
+        font-weight: 700;
+      }
+
+      .footer-note {
+        margin-top: 26px;
+        color: var(--muted);
+        font: 400 14px/1.65 Arial, Helvetica, sans-serif;
+      }
+
+      @media (max-width: 920px) {
+        .hero {
+          padding: 28px;
+        }
+
+        .hero-grid,
+        .cards.two,
+        .cards.three {
+          grid-template-columns: 1fr;
+        }
+
+        .rule {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="hero">
+        <p class="eyebrow">Developer Guideline</p>
+        <h1>How to prepare a React template for plug-and-play CMS import</h1>
+        <p class="hero-copy">
+          This guideline is for frontend developers building a React project that
+          should become a CMS template after import. The goal is not to upload a
+          finished website and run it directly. The goal is to structure the
+          frontend so the CMS can recognize each page, recognize each section on
+          each page, and expose those sections as editable content inside the CMS
+          page editor.
+        </p>
+
+        <div class="hero-grid">
+          <article class="metric">
+            <div class="metric-label">Developer goal</div>
+            <div class="metric-value">Build once, import cleanly, edit in CMS</div>
+          </article>
+          <article class="metric">
+            <div class="metric-label">Import target</div>
+            <div class="metric-value">Structured pages and editable sections</div>
+          </article>
+          <article class="metric">
+            <div class="metric-label">Core requirement</div>
+            <div class="metric-value">Sections must be declared, serializable, and mappable</div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2 class="section-title">The main principle</h2>
+        <p class="section-copy">
+          A CMS-importable React template must be treated as structured content,
+          not just layout. Every page must have a known identity, and every
+          editable section must have a stable type, stable data shape, and
+          predictable location in the page tree. If the importer cannot identify
+          those things, the template will not be plug and play.
+        </p>
+
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Bad fit for import</th>
+              <th>Good fit for import</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Page assembled from deeply nested custom components with no clear section boundaries.</td>
+              <td>Page composed from named, top-level sections with explicit section types.</td>
+            </tr>
+            <tr>
+              <td>Text and media hardcoded directly across many files.</td>
+              <td>Content passed through serializable section props or section data objects.</td>
+            </tr>
+            <tr>
+              <td>Dynamic route generation with hidden path logic.</td>
+              <td>Explicit route declarations or a manifest that lists page routes.</td>
+            </tr>
+            <tr>
+              <td>One-off animation wrappers with no reusable section meaning.</td>
+              <td>Presentation layer separated from section content structure.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="section">
+        <h2 class="section-title">Required project structure</h2>
+        <p class="section-copy">
+          The React project should be prepared so the importer can find the app
+          root, routes, assets, and page sections without reverse-engineering the
+          entire codebase.
+        </p>
+
+        <div class="code">template-project/
+  package.json
+  template.dsgnfi.json
+  src/
+    App.tsx
+    pages/
+      HomePage.tsx
+      AboutPage.tsx
+      ContactPage.tsx
+    sections/
+      HeroSection.tsx
+      FeaturesSection.tsx
+      GallerySection.tsx
+      FaqSection.tsx
+    data/
+      home.sections.ts
+      about.sections.ts
+  public/
+    assets/
+      hero.jpg
+      gallery-1.jpg
+      intro-video.mp4</div>
+
+        <div class="cards three">
+          <article class="card">
+            <h3>Required</h3>
+            <ul>
+              <li>`package.json`</li>
+              <li>`src/App.tsx`</li>
+              <li>page entry components</li>
+              <li>`public/assets` for importable media</li>
+              <li>`template.dsgnfi.json` manifest</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>Recommended</h3>
+            <ul>
+              <li>one `pages/` directory</li>
+              <li>one `sections/` directory</li>
+              <li>separate `data/` files per page</li>
+              <li>clear section naming conventions</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>Avoid</h3>
+            <ul>
+              <li>only shipping `dist/`</li>
+              <li>burying routes inside factories</li>
+              <li>mixing content and runtime fetch logic everywhere</li>
+              <li>opaque layout-only wrapper trees</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2 class="section-title">The manifest contract</h2>
+        <p class="section-copy">
+          A plug-and-play import should not depend only on regex over `App.tsx`.
+          The project should provide a manifest that tells the CMS what pages
+          exist, which sections appear on those pages, and which section schema
+          each one should map to.
+        </p>
+
+        <div class="code">{
+  "name": "Agency Editorial Template",
+  "framework": "react-vite",
+  "category": "agency",
+  "assetsDir": "public/assets",
+  "routes": [
+    { "path": "/", "pageKey": "home", "component": "HomePage" },
+    { "path": "/about", "pageKey": "about", "component": "AboutPage" },
+    { "path": "/contact", "pageKey": "contact", "component": "ContactPage" }
+  ],
+  "pages": [
+    {
+      "pageKey": "home",
+      "title": "Home",
+      "slug": "/",
+      "sections": [
+        {
+          "id": "home-hero",
+          "type": "hero",
+          "label": "Hero",
+          "component": "HeroSection",
+          "dataSource": "src/data/home.sections.ts#hero"
+        },
+        {
+          "id": "home-features",
+          "type": "features",
+          "label": "Features",
+          "component": "FeaturesSection",
+          "dataSource": "src/data/home.sections.ts#features"
+        }
+      ]
+    }
+  ]
+}</div>
+
+        <div class="cards two">
+          <article class="card">
+            <h3>Manifest rules</h3>
+            <ul>
+              <li>Every page must have a stable `pageKey`.</li>
+              <li>Every section must have a stable `id` and `type`.</li>
+              <li>Every section should point to a single data source.</li>
+              <li>Section `type` must map to a known CMS block type.</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>What the CMS gets from this</h3>
+            <ul>
+              <li>recognizable pages</li>
+              <li>predictable section ordering</li>
+              <li>block editor selection by section type</li>
+              <li>safe asset import and rewriting</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2 class="section-title">How page sections should be built</h2>
+        <p class="section-copy">
+          Each section should behave like a CMS block. That means the section
+          needs a clear identity and a serializable content shape separate from
+          its presentation logic.
+        </p>
+
+        <div class="rule-list">
+          <article class="rule">
+            <div class="rule-name">One section = one block type</div>
+            <div class="rule-body">
+              A section component should map to a single conceptual CMS block.
+              If one component mixes hero, testimonials, gallery, and CTA in one
+              blob, the importer cannot expose them cleanly in the editor.
+            </div>
+          </article>
+
+          <article class="rule">
+            <div class="rule-name">Serializable content only</div>
+            <div class="rule-body">
+              Section data should be plain JSON-compatible values: strings,
+              numbers, booleans, arrays, objects, and asset references. Avoid
+              hiding content inside closures, hooks, or imperative DOM mutations.
+            </div>
+          </article>
+
+          <article class="rule">
+            <div class="rule-name">Separate content from effects</div>
+            <div class="rule-body">
+              Motion, transitions, cursor effects, and interaction behavior can
+              exist in the component, but the editable content model must be
+              separate. The CMS edits the section data, not the animation code.
+            </div>
+          </article>
+
+          <article class="rule">
+            <div class="rule-name">Stable field names</div>
+            <div class="rule-body">
+              If a hero uses `title`, `subtitle`, `imageUrl`, and `cta`, keep
+              those names stable. The CMS editor depends on stable field names to
+              show correct editing controls.
+            </div>
+          </article>
+
+          <article class="rule">
+            <div class="rule-name">Explicit section ordering</div>
+            <div class="rule-body">
+              A page should declare its sections in order. The CMS should not
+              have to infer order by crawling arbitrary JSX trees.
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2 class="section-title">Recommended React coding pattern</h2>
+        <p class="section-copy">
+          The easiest import target is a page built from a sections array plus
+          presentational components.
+        </p>
+
+        <div class="code">export const homeSections = [
+  {
+    id: "home-hero",
+    type: "hero",
+    data: {
+      title: "Design systems for modern brands",
+      subtitle: "A clearer path from story to launch",
+      imageUrl: "/assets/hero.jpg"
+    }
+  },
+  {
+    id: "home-features",
+    type: "features",
+    data: {
+      heading: "What we do",
+      items: [
+        { title: "Strategy", description: "Find the right direction" },
+        { title: "Design", description: "Shape the experience" }
+      ]
+    }
+  }
+];
+
+export function HomePage() {
+  return &lt;Page sections={homeSections} /&gt;;
+}</div>
+
+        <div class="cards two">
+          <article class="card">
+            <h3>Why this works well</h3>
+            <ul>
+              <li>The importer can read section identity directly.</li>
+              <li>Each section already looks like a CMS block payload.</li>
+              <li>Data can be validated before import.</li>
+              <li>The CMS page editor can reuse the same field structure.</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>What to avoid</h3>
+            <ul>
+              <li>building a page from many tiny anonymous fragments</li>
+              <li>scattering page copy across five files with no master shape</li>
+              <li>deriving content from side effects instead of explicit data</li>
+              <li>making the importer infer semantics from CSS classes</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2 class="section-title">How the CMS should recognize sections</h2>
+        <p class="section-copy">
+          For a section to be editable in the CMS page editor, the system needs
+          a direct mapping between the imported section type and a known editor
+          schema.
+        </p>
+
+        <table class="table">
+          <thead>
+            <tr>
+              <th>React template provides</th>
+              <th>CMS must resolve</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>`type: "hero"`</td>
+              <td>editor form for hero fields and public renderer for hero blocks</td>
+            </tr>
+            <tr>
+              <td>`type: "features"`</td>
+              <td>repeatable item editor plus public features section renderer</td>
+            </tr>
+            <tr>
+              <td>`type: "gallery"`</td>
+              <td>media picker/editor plus gallery renderer</td>
+            </tr>
+            <tr>
+              <td>new custom section type</td>
+              <td>new block schema, new editor UI, and new public renderer</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <p class="footer-note">
+          Plug and play only works when imported section types already have
+          editor support. If a developer invents a new section type, the CMS
+          team still has to implement that block type before import can be
+          considered complete.
+        </p>
+      </section>
+
+      <section class="section">
+        <h2 class="section-title">Developer checklist before upload</h2>
+        <div class="cards two">
+          <article class="card">
+            <h3>Project readiness</h3>
+            <ol>
+              <li>Use React + Vite.</li>
+              <li>Keep page routes explicit.</li>
+              <li>Provide `template.dsgnfi.json`.</li>
+              <li>Store media in `public/assets`.</li>
+              <li>Keep one canonical data source per page.</li>
+            </ol>
+          </article>
+          <article class="card">
+            <h3>Section readiness</h3>
+            <ol>
+              <li>Give each section a stable `id`.</li>
+              <li>Give each section a stable `type`.</li>
+              <li>Keep section data serializable.</li>
+              <li>Map each section type to a known CMS block.</li>
+              <li>Do not hide editable content inside animation wrappers.</li>
+            </ol>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2 class="section-title">Import pipeline the team should implement</h2>
+        <div class="cards three">
+          <article class="card">
+            <div class="pill">Step 1</div>
+            <h3>Validate the project</h3>
+            <p>
+              Confirm framework, manifest presence, route contract, and asset
+              directory. Reject malformed bundles with precise errors.
+            </p>
+          </article>
+          <article class="card">
+            <div class="pill">Step 2</div>
+            <h3>Read pages and sections</h3>
+            <p>
+              Build a normalized page model from the manifest and section data
+              instead of reverse-engineering arbitrary JSX.
+            </p>
+          </article>
+          <article class="card">
+            <div class="pill">Step 3</div>
+            <h3>Map to CMS blocks</h3>
+            <p>
+              Convert recognized section types into CMS-native block payloads and
+              attach asset URLs rewritten into CMS storage.
+            </p>
+          </article>
+          <article class="card">
+            <div class="pill">Step 4</div>
+            <h3>Publish template</h3>
+            <p>
+              Save supported pages, navigation defaults, and settings defaults as
+              a custom template version.
+            </p>
+          </article>
+          <article class="card">
+            <div class="pill">Step 5</div>
+            <h3>Materialize into a site</h3>
+            <p>
+              Create missing pages for the selected site and preserve already
+              modified pages unless the operator chooses to replace them.
+            </p>
+          </article>
+          <article class="card">
+            <div class="pill">Step 6</div>
+            <h3>Edit from the CMS</h3>
+            <p>
+              Each recognized section should appear in the page editor with the
+              correct form fields for its block type.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2 class="section-title">Definition of plug and play</h2>
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Condition</th>
+              <th>Expected result</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Developer uploads a valid React template bundle</td>
+              <td><span class="ok">Importer accepts it without manual code edits.</span></td>
+            </tr>
+            <tr>
+              <td>Page manifest declares routes and sections</td>
+              <td><span class="ok">CMS creates recognizable pages in the correct order.</span></td>
+            </tr>
+            <tr>
+              <td>Section types map to known CMS blocks</td>
+              <td><span class="ok">Sections are editable in the CMS page editor.</span></td>
+            </tr>
+            <tr>
+              <td>New section type appears with no CMS support</td>
+              <td><span class="warn">Import should warn or fail until block support exists.</span></td>
+            </tr>
+            <tr>
+              <td>Site already has modified pages</td>
+              <td><span class="ok">Importer preserves modified pages unless overwrite is explicitly requested.</span></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <p class="footer-note">
+          The correct mental model is: React source defines the template intent,
+          the manifest defines the import contract, and the CMS stores the final
+          editable page/block data.
+        </p>
+      </section>
+    </main>
+  </body>
+</html>

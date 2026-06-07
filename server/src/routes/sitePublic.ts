@@ -45,6 +45,7 @@ router.get("/", async (req, res) => {
     site: payload.site,
     settings: payload.settings,
     theme: payload.theme,
+    pages: payload.pages,
     navigation: payload.navigation,
   });
 });

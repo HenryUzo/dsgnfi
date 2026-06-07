@@ -1,4 +1,7 @@
-import { buildStarterSupportedPages } from "../pageDefaults";
+import {
+  buildStarterAddablePageTemplates,
+  buildStarterSupportedPages,
+} from "../pageDefaults";
 import type { TemplateManifest } from "../types";
 
 export const restaurantStarterManifest: TemplateManifest = {
@@ -32,4 +35,5 @@ export const restaurantStarterManifest: TemplateManifest = {
     processEnabled: true,
     workEnabled: false,
   }),
+  addablePageTemplates: buildStarterAddablePageTemplates("food"),
 };

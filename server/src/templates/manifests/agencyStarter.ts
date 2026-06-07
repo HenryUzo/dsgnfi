@@ -1,4 +1,7 @@
-import { buildStarterSupportedPages } from "../pageDefaults";
+import {
+  buildStarterAddablePageTemplates,
+  buildStarterSupportedPages,
+} from "../pageDefaults";
 import type { TemplateManifest } from "../types";
 
 export const agencyStarterManifest: TemplateManifest = {
@@ -32,4 +35,5 @@ export const agencyStarterManifest: TemplateManifest = {
     processEnabled: true,
     workEnabled: true,
   }),
+  addablePageTemplates: buildStarterAddablePageTemplates("agency"),
 };

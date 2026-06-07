@@ -8,6 +8,17 @@ const boolFromString = z
     return normalized === "true" || normalized === "1" || normalized === "yes";
   });
 
+const optionalNonEmptyString = z.preprocess(
+  (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+  z.string().min(1).optional()
+);
+
+const nonEmptyStringWithDefault = (defaultValue: string) =>
+  z.preprocess(
+    (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+    z.string().min(1).default(defaultValue)
+  );
+
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
 
@@ -20,6 +31,8 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1).optional(),
 
   JWT_SECRET: z.string().min(1),
+  OPENAI_API_KEY: optionalNonEmptyString,
+  OPENAI_MODEL: nonEmptyStringWithDefault("gpt-5-mini"),
 
   APP_BASE_DOMAIN: z.string().min(1).optional(),
   UPLOADS_DIR: z.string().min(1).optional(),

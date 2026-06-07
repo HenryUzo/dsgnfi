@@ -5,13 +5,21 @@ import { prisma } from "../db/prisma";
 import { requireAdmin } from "../middleware/requireAdmin";
 import { requireRole } from "../middleware/requireRole";
 import { withAdminSiteContext } from "../middleware/withAdminSiteContext";
+import { pageSlugSchema } from "../services/pageValidation";
 import {
+  createAdminPage,
+  deleteAdminPage,
+  duplicateAdminPage,
   getAdminPageDraft,
   getAdminPageHistory,
+  listAdminAddablePageTemplates,
   listAdminPages,
   publishAdminPage,
+  renameAdminPageTitle,
   restoreAdminPageRevision,
   saveAdminPageDraft,
+  setAdminPageVisibility,
+  updateAdminPageMeta,
 } from "../services/pageAdmin";
 
 const router = Router();
@@ -23,6 +31,23 @@ const pageParamsSchema = z.object({
 const restoreParamsSchema = z.object({
   pageKey: z.string().min(1),
   revisionId: z.string().min(1),
+});
+
+const metaUpdateSchema = z.object({
+  title: z.string().trim().min(1),
+  slug: pageSlugSchema,
+  seoTitle: z.string().trim().min(1).nullable().optional(),
+  seoDescription: z.string().trim().min(1).nullable().optional(),
+  hierarchyRole: z.enum(["MAIN", "INNER"]),
+  defaultParentPageKey: z.string().trim().min(1).nullable().optional(),
+});
+
+const titleUpdateSchema = z.object({
+  title: z.string().trim().min(1),
+});
+
+const visibilitySchema = z.object({
+  isVisible: z.boolean(),
 });
 
 function getSiteId(req: Request, res: Response) {
@@ -63,6 +88,42 @@ router.get("/", async (req, res) => {
 
   const pages = await listAdminPages(prisma, siteId);
   return res.json({ ok: true, pages });
+});
+
+router.get("/catalog", async (req, res) => {
+  const siteId = getSiteId(req, res);
+  if (!siteId) return;
+
+  const templates = await listAdminAddablePageTemplates(prisma, siteId);
+  return res.json({ ok: true, templates });
+});
+
+router.post("/", requireRole(["OWNER", "ADMIN", "EDITOR"]), async (req, res) => {
+  const siteId = getSiteId(req, res);
+  const adminId = getAdminId(req, res);
+  if (!siteId || !adminId) return;
+
+  const result = await createAdminPage(prisma, {
+    siteId,
+    adminId,
+    payload: req.body,
+  });
+
+  if (result.type === "template_not_found") {
+    return res.status(400).json({
+      ok: false,
+      error: { message: "Selected page template is not available for this site." },
+    });
+  }
+
+  if (result.type === "validation_error") {
+    return res.status(400).json({
+      ok: false,
+      error: { message: getValidationMessage(result.error) },
+    });
+  }
+
+  return res.status(201).json({ ok: true, page: result.page });
 });
 
 router.get("/:pageKey/draft", async (req, res) => {
@@ -127,6 +188,172 @@ router.put("/:pageKey/draft", requireRole(["OWNER", "ADMIN", "EDITOR"]), async (
   }
 
   return res.json({ ok: true, page: result.page });
+});
+
+router.patch("/:pageKey/meta", requireRole(["OWNER", "ADMIN", "EDITOR"]), async (req, res) => {
+  const siteId = getSiteId(req, res);
+  const adminId = getAdminId(req, res);
+  if (!siteId || !adminId) return;
+
+  const parsedParams = pageParamsSchema.safeParse(req.params);
+  const parsedBody = metaUpdateSchema.safeParse(req.body ?? {});
+
+  if (!parsedParams.success || !parsedBody.success) {
+    return res.status(400).json({
+      ok: false,
+      error: {
+        message: parsedBody.success
+          ? "Invalid page key."
+          : getValidationMessage(parsedBody.error),
+      },
+    });
+  }
+
+  const result = await updateAdminPageMeta(prisma, {
+    siteId,
+    pageKey: parsedParams.data.pageKey,
+    adminId,
+    payload: parsedBody.data,
+  });
+
+  if (result.type === "not_found") {
+    return res.status(404).json({
+      ok: false,
+      error: { message: "Page not found." },
+    });
+  }
+
+  return res.json({ ok: true, page: result.page });
+});
+
+router.patch("/:pageKey/title", requireRole(["OWNER", "ADMIN", "EDITOR"]), async (req, res) => {
+  const siteId = getSiteId(req, res);
+  const adminId = getAdminId(req, res);
+  if (!siteId || !adminId) return;
+
+  const parsedParams = pageParamsSchema.safeParse(req.params);
+  const parsedBody = titleUpdateSchema.safeParse(req.body ?? {});
+
+  if (!parsedParams.success || !parsedBody.success) {
+    return res.status(400).json({
+      ok: false,
+      error: {
+        message: parsedBody.success
+          ? "Invalid page key."
+          : getValidationMessage(parsedBody.error),
+      },
+    });
+  }
+
+  const result = await renameAdminPageTitle(prisma, {
+    siteId,
+    pageKey: parsedParams.data.pageKey,
+    adminId,
+    title: parsedBody.data.title,
+  });
+
+  if (result.type === "not_found") {
+    return res.status(404).json({
+      ok: false,
+      error: { message: "Page not found." },
+    });
+  }
+
+  return res.json({ ok: true, page: result.page });
+});
+
+router.patch("/:pageKey/visibility", requireRole(["OWNER", "ADMIN", "EDITOR"]), async (req, res) => {
+  const siteId = getSiteId(req, res);
+  const adminId = getAdminId(req, res);
+  if (!siteId || !adminId) return;
+
+  const parsedParams = pageParamsSchema.safeParse(req.params);
+  const parsedBody = visibilitySchema.safeParse(req.body ?? {});
+
+  if (!parsedParams.success || !parsedBody.success) {
+    return res.status(400).json({
+      ok: false,
+      error: {
+        message: parsedBody.success
+          ? "Invalid page key."
+          : getValidationMessage(parsedBody.error),
+      },
+    });
+  }
+
+  const result = await setAdminPageVisibility(prisma, {
+    siteId,
+    pageKey: parsedParams.data.pageKey,
+    adminId,
+    isVisible: parsedBody.data.isVisible,
+  });
+
+  if (result.type === "not_found") {
+    return res.status(404).json({
+      ok: false,
+      error: { message: "Page not found." },
+    });
+  }
+
+  return res.json({ ok: true, page: result.page });
+});
+
+router.post("/:pageKey/duplicate", requireRole(["OWNER", "ADMIN", "EDITOR"]), async (req, res) => {
+  const siteId = getSiteId(req, res);
+  const adminId = getAdminId(req, res);
+  if (!siteId || !adminId) return;
+
+  const parsed = pageParamsSchema.safeParse(req.params);
+  if (!parsed.success) {
+    return res.status(400).json({
+      ok: false,
+      error: { message: "Invalid page key." },
+    });
+  }
+
+  const result = await duplicateAdminPage(prisma, {
+    siteId,
+    pageKey: parsed.data.pageKey,
+    adminId,
+  });
+
+  if (result.type === "not_found") {
+    return res.status(404).json({
+      ok: false,
+      error: { message: "Page not found." },
+    });
+  }
+
+  return res.status(201).json({ ok: true, page: result.page });
+});
+
+router.delete("/:pageKey", requireRole(["OWNER", "ADMIN", "EDITOR"]), async (req, res) => {
+  const siteId = getSiteId(req, res);
+  const adminId = getAdminId(req, res);
+  if (!siteId || !adminId) return;
+
+  const parsed = pageParamsSchema.safeParse(req.params);
+  if (!parsed.success) {
+    return res.status(400).json({
+      ok: false,
+      error: { message: "Invalid page key." },
+    });
+  }
+
+  const result = await deleteAdminPage(prisma, {
+    siteId,
+    pageKey: parsed.data.pageKey,
+    adminId,
+  });
+
+  if (result.type === "not_found") {
+    return res.status(404).json({
+      ok: false,
+      error: { message: "Page not found." },
+    });
+  }
+
+  return res.json({ ok: true, pageKey: result.page.pageKey });
 });
 
 router.post("/:pageKey/publish", requireRole(["OWNER", "ADMIN", "EDITOR"]), async (req, res) => {
