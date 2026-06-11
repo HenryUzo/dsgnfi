@@ -1,17 +1,6 @@
 const fs = require("fs");
 const path = require("path");
-
-const ignoredDirs = new Set([
-  ".git",
-  "node_modules",
-  "dist",
-  "build",
-  ".vite",
-  ".next",
-  "out",
-  "coverage",
-  "uploads",
-]);
+const { execFileSync } = require("child_process");
 
 const allowlisted = new Set([
   path.normalize("server/.env.example"),
@@ -42,23 +31,48 @@ function isTextCandidate(file) {
   return textExtensions.has(path.extname(file));
 }
 
-function walk(dir, files = []) {
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (ignoredDirs.has(entry.name)) continue;
-    const fullPath = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      walk(fullPath, files);
-    } else if (entry.isFile() && isTextCandidate(fullPath)) {
-      files.push(fullPath);
-    }
+function gitTrackedFiles(cwd) {
+  try {
+    return execFileSync("git", ["ls-files"], {
+      cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    })
+      .split(/\r?\n/)
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+      .map((entry) => path.join(cwd, entry))
+      .filter((entry) => {
+        try {
+          return fs.statSync(entry).isFile();
+        } catch {
+          return false;
+        }
+      });
+  } catch {
+    return [];
   }
-  return files;
+}
+
+function nestedGitDirs(root) {
+  return fs
+    .readdirSync(root, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && entry.name !== ".git" && entry.name !== "node_modules")
+    .map((entry) => path.join(root, entry.name))
+    .filter((dir) => fs.existsSync(path.join(dir, ".git")));
 }
 
 const root = process.cwd();
 const findings = [];
+const files = Array.from(
+  new Set([
+    ...gitTrackedFiles(root),
+    ...nestedGitDirs(root).flatMap((dir) => gitTrackedFiles(dir)),
+  ])
+);
 
-for (const fullPath of walk(root)) {
+for (const fullPath of files) {
+  if (!isTextCandidate(fullPath)) continue;
   const relative = path.relative(root, fullPath);
   if (allowlisted.has(path.normalize(relative))) continue;
 

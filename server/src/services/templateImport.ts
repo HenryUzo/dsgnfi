@@ -17,7 +17,7 @@ import { ApiRequestError } from "./apiErrors";
 import { writeAuditLog } from "./auditLog";
 import { getTemplateDetail, publishCustomTemplate } from "./templateCatalog";
 import { validateTemplatePresetOverrides } from "./templatePresets";
-import { getUploadsDir } from "./uploadStorage";
+import { copyFromLocalPath } from "./storage";
 
 type ImportReport = {
   source: "react-vite";
@@ -170,7 +170,7 @@ function discoverRoutes(appSource: string) {
   return routes;
 }
 
-async function copyBundleAssets(appRoot: string, baseUrl: string) {
+async function copyBundleAssets(appRoot: string, options: { tenantId: string; siteId: string; importRunId: string }) {
   const assetsDir = path.join(appRoot, "public", "assets");
   const assetMap = new Map<string, string>();
   const copiedAssets: ImportReport["copiedAssets"] = [];
@@ -179,8 +179,6 @@ async function copyBundleAssets(appRoot: string, baseUrl: string) {
     return { assetMap, copiedAssets };
   }
 
-  const uploadsDir = getUploadsDir();
-  await fs.mkdir(uploadsDir, { recursive: true });
   const files = await fs.readdir(assetsDir);
 
   for (const filename of files) {
@@ -190,12 +188,19 @@ async function copyBundleAssets(appRoot: string, baseUrl: string) {
       continue;
     }
 
-    const nextName = `${Date.now()}-${crypto.randomBytes(5).toString("hex")}-${filename}`;
-    const target = path.join(uploadsDir, nextName);
-    await fs.copyFile(source, target);
+    const stored = await copyFromLocalPath({
+      visibility: "public",
+      tenantId: options.tenantId,
+      siteId: options.siteId,
+      category: "template-import",
+      ownerId: options.importRunId,
+      filename,
+      sourcePath: source,
+      mimeType: mimeTypeFor(filename),
+    });
 
     const publicSource = `/assets/${filename}`;
-    const url = `${baseUrl}/uploads/${nextName}`;
+    const url = stored.publicUrl ?? `/uploads/${stored.key}`;
     assetMap.set(publicSource, url);
     copiedAssets.push({ source: publicSource, url });
   }
@@ -748,6 +753,7 @@ export async function importReactViteTemplate(
   prisma: PrismaClient,
   options: {
     tenantId: string;
+    siteId: string;
     adminId: string;
     zipPath: string;
     originalFilename: string;
@@ -774,7 +780,12 @@ export async function importReactViteTemplate(
       .filter((pageKey) => !detectedPages.has(pageKey))
       .map((pageKey) => `Expected Blit page "${pageKey}" was not discovered in App.tsx.`);
 
-    const { assetMap, copiedAssets } = await copyBundleAssets(appRoot, options.baseUrl);
+    const importRunId = crypto.randomUUID();
+    const { assetMap, copiedAssets } = await copyBundleAssets(appRoot, {
+      tenantId: options.tenantId,
+      siteId: options.siteId,
+      importRunId,
+    });
     const supportedPages = buildBlitPages(assetMap);
     const mappedSections = supportedPages.flatMap((page) =>
       (page.defaultBlocks ?? []).map((block) => block.type)

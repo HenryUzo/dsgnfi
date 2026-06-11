@@ -138,8 +138,15 @@ router.post(
 
     try {
       const baseUrl = `${req.protocol}://${req.get("host")}`;
+      const siteId = req.context?.siteId;
+      if (!siteId) {
+        return res
+          .status(500)
+          .json(apiError("site_context_missing", "Missing admin site context."));
+      }
       const imported = await importReactViteTemplate(prisma, {
         tenantId,
+        siteId,
         adminId,
         zipPath: req.file.path,
         originalFilename: req.file.originalname,

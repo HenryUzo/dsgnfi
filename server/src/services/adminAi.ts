@@ -9,6 +9,15 @@ import type {
 } from "openai/resources/responses/responses";
 
 import { env } from "../config/env";
+import {
+  buildAdminGuideMetadata,
+  getAvailableBlockTypes,
+  resolveAdminGuideIntent,
+  type AdminGuideIntent,
+  type AdminGuideIntentId,
+  type AdminGuideMetadata,
+} from "./adminGuideContext";
+import { redactSensitiveText } from "./adminAiRedaction";
 
 export type AdminAiGuideLink = {
   label: string;
@@ -19,6 +28,9 @@ export type AdminAiGuide = {
   intro: string;
   steps: string[];
   note?: string | null;
+  why?: string | null;
+  intentId?: AdminGuideIntentId;
+  primaryLink?: AdminAiGuideLink | null;
   links: AdminAiGuideLink[];
 };
 
@@ -77,7 +89,7 @@ const guideResponseSchema: ResponseFormatTextJSONSchemaConfig = {
   schema: {
     type: "object",
     additionalProperties: false,
-    required: ["intro", "steps", "note", "links"],
+    required: ["intro", "steps", "note", "why", "links"],
     properties: {
       intro: {
         type: "string",
@@ -97,6 +109,10 @@ const guideResponseSchema: ResponseFormatTextJSONSchemaConfig = {
       note: {
         type: ["string", "null"],
         maxLength: 240,
+      },
+      why: {
+        type: ["string", "null"],
+        maxLength: 320,
       },
       links: {
         type: "array",
@@ -133,7 +149,7 @@ function getOpenAiModel() {
 }
 
 function trimContent(value: string) {
-  const trimmed = value.trim();
+  const trimmed = redactSensitiveText(value).trim();
   if (trimmed.length <= MAX_MESSAGE_LENGTH) {
     return trimmed;
   }
@@ -166,29 +182,7 @@ function getAttachmentSummary(attachments: AdminAiAttachment[]) {
   return attachments.map((attachment) => `${attachment.kind}: ${attachment.name} (${attachment.mimeType})`).join("\n");
 }
 
-function isAllowedAdminRoute(href: string, context: AdminAiContext) {
-  if (!href.startsWith("/admin")) {
-    return false;
-  }
-
-  const allowedRoutes = getAllowedRouteSummary(context);
-  return allowedRoutes.some((route) => href === route || href.startsWith(`${route}/`) || href.startsWith(`${route}?`));
-}
-
-function sanitizeGuideLink(link: AdminAiGuideLink, context: AdminAiContext): AdminAiGuideLink | null {
-  const label = link.label.trim().replace(/\s+/g, " ");
-  const href = link.href.trim();
-  if (!label || !href || !isAllowedAdminRoute(href, context)) {
-    return null;
-  }
-
-  return {
-    label: label.slice(0, 48),
-    href,
-  };
-}
-
-function buildFallbackGuide(context: AdminAiContext, content: string): AdminAiGuide {
+function buildFallbackGuide(context: AdminAiContext, intent: AdminGuideIntent, content: string): AdminAiGuide {
   const intro =
     content.trim() ||
     `You're on ${context.screenTitle}. Open the linked admin screen and follow the steps there.`;
@@ -197,18 +191,20 @@ function buildFallbackGuide(context: AdminAiContext, content: string): AdminAiGu
     intro,
     steps: ["Open the linked admin screen.", "Use the visible controls on that page to complete the task."],
     note: "This assistant can guide you, but it does not make admin changes itself.",
-    links: [
-      {
-        label: context.screenTitle.startsWith("Admin") ? "Open current screen" : `Open ${context.screenTitle}`,
-        href: context.route.startsWith("/admin") ? context.route : "/admin",
-      },
-    ],
+    why: intent.routeHints[0] ?? "This screen is the safest admin destination for the requested task.",
+    intentId: intent.id,
+    primaryLink: intent.primaryLink,
+    links: intent.links,
   };
 }
 
-function sanitizeGuide(rawGuide: Partial<AdminAiGuide> | null | undefined, context: AdminAiContext): AdminAiGuide {
+function sanitizeGuide(
+  rawGuide: Partial<AdminAiGuide> | null | undefined,
+  context: AdminAiContext,
+  intent: AdminGuideIntent
+): AdminAiGuide {
   if (!rawGuide) {
-    return buildFallbackGuide(context, "");
+    return buildFallbackGuide(context, intent, "");
   }
 
   const intro = typeof rawGuide.intro === "string" ? rawGuide.intro.trim() : "";
@@ -216,33 +212,19 @@ function sanitizeGuide(rawGuide: Partial<AdminAiGuide> | null | undefined, conte
     ? rawGuide.steps.map((step) => step.trim()).filter(Boolean).slice(0, 6)
     : [];
   const note = typeof rawGuide.note === "string" ? rawGuide.note.trim() : null;
-  const links = Array.isArray(rawGuide.links)
-    ? rawGuide.links
-        .map((link) => sanitizeGuideLink(link, context))
-        .filter((link): link is AdminAiGuideLink => Boolean(link))
-        .slice(0, 3)
-    : [];
+  const why = typeof rawGuide.why === "string" ? rawGuide.why.trim() : null;
 
   const normalized: AdminAiGuide = {
     intro: intro || `You're on ${context.screenTitle}. Follow these steps in the admin UI.`,
     steps: steps.length > 0 ? steps : ["Open the linked admin screen.", "Use the controls on that page to complete the task."],
     note,
-    links: links.length > 0 ? links : buildFallbackGuide(context, intro).links,
+    why: why || intent.routeHints[0] || null,
+    intentId: intent.id,
+    primaryLink: intent.primaryLink,
+    links: intent.links,
   };
 
   return normalized;
-}
-
-function parseDataUrl(dataUrl: string) {
-  const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
-  if (!match) {
-    throw new Error("Invalid attachment encoding.");
-  }
-
-  return {
-    mimeType: match[1] ?? "application/octet-stream",
-    base64: match[2] ?? "",
-  };
 }
 
 function buildAttachmentInput(attachments: AdminAiAttachment[]): ResponseInputContent[] {
@@ -255,11 +237,9 @@ function buildAttachmentInput(attachments: AdminAiAttachment[]): ResponseInputCo
       } satisfies ResponseInputContent;
     }
 
-    const parsed = parseDataUrl(attachment.dataUrl);
     return {
       type: "input_file",
-      detail: "high",
-      file_data: parsed.base64,
+      file_data: attachment.dataUrl,
       filename: attachment.name,
     } satisfies ResponseInputContent;
   });
@@ -303,7 +283,16 @@ function buildGuideContent(guide: AdminAiGuide) {
   return `${guide.intro} ${stepText}${noteText}`.trim();
 }
 
-export function buildAdminAssistantInstructions(context: AdminAiContext, attachments: AdminAiAttachment[] = []) {
+function compactJson(value: unknown) {
+  return JSON.stringify(value);
+}
+
+export function buildAdminAssistantInstructions(
+  context: AdminAiContext,
+  attachments: AdminAiAttachment[] = [],
+  guideIntent: AdminGuideIntent = resolveAdminGuideIntent([], context),
+  guideMetadata: AdminGuideMetadata = buildAdminGuideMetadata(context)
+) {
   const pageEditor = context.pageEditor
     ? [
         `Page editor page key: ${context.pageEditor.pageKey ?? "unknown"}`,
@@ -314,6 +303,7 @@ export function buildAdminAssistantInstructions(context: AdminAiContext, attachm
         `Current block types: ${(context.pageEditor.blockTypes ?? []).join(", ") || "none"}`,
       ].join("\n")
     : "No page editor metadata is active.";
+  const availableBlockTypes = getAvailableBlockTypes(guideMetadata);
 
   return [
     "You are the DSGNFI CMS admin guide.",
@@ -322,9 +312,9 @@ export function buildAdminAssistantInstructions(context: AdminAiContext, attachm
     "If a user asks you to perform an action, explain the exact UI steps instead of claiming you did it.",
     "Keep answers concise, practical, and specific to the current screen when context is available.",
     "Return valid JSON that follows the schema exactly.",
-    "Always include 1 to 3 internal admin links that take the user to the correct screen.",
-    "Links must only use real internal admin routes from the allowed list below.",
-    "Use the current route when the user should stay on the current screen.",
+    "The server has already selected deterministic destination links for this request.",
+    "Explain the steps and why the selected screen is appropriate, but do not invent destination links.",
+    "Use the deterministic links listed below if you mention a destination.",
     "Use uploaded files only as supporting context for your explanation.",
     "",
     "Admin areas available:",
@@ -343,8 +333,24 @@ export function buildAdminAssistantInstructions(context: AdminAiContext, attachm
     `Site: ${context.siteName ?? "unknown"}`,
     `Role: ${context.role ?? "unknown"}`,
     pageEditor,
+    `Available block types: ${availableBlockTypes.join(", ") || "unknown"}`,
+    "",
+    "Detected guide intent:",
+    compactJson({
+      id: guideIntent.id,
+      label: guideIntent.label,
+      primaryLink: guideIntent.primaryLink,
+      links: guideIntent.links,
+      routeHints: guideIntent.routeHints,
+    }),
+    "",
+    "Guide metadata JSON:",
+    compactJson(guideMetadata),
     "",
     "Allowed admin links for this answer:",
+    ...guideIntent.links.map((route) => `- ${route.label}: ${route.href}`),
+    "",
+    "All known safe admin routes:",
     ...getAllowedRouteSummary(context).map((route) => `- ${route}`),
     "",
     "Uploaded files:",
@@ -364,10 +370,12 @@ export async function createAdminAiReply(options: {
   }
 
   const attachments = options.attachments ?? [];
+  const guideMetadata = buildAdminGuideMetadata(options.context);
+  const guideIntent = resolveAdminGuideIntent(options.messages, options.context);
   const client = new OpenAI({ apiKey });
   const response = await client.responses.create({
     model: getOpenAiModel(),
-    instructions: buildAdminAssistantInstructions(options.context, attachments),
+    instructions: buildAdminAssistantInstructions(options.context, attachments, guideIntent, guideMetadata),
     input: buildResponseInput(options.messages, attachments),
     max_output_tokens: 900,
     store: false,
@@ -385,9 +393,10 @@ export async function createAdminAiReply(options: {
     }
   })();
 
-  const guide = sanitizeGuide(parsed, options.context);
+  const guide = sanitizeGuide(parsed, options.context, guideIntent);
   return {
     content: buildGuideContent(guide),
     guide,
+    intent: guideIntent,
   };
 }

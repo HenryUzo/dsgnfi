@@ -4,11 +4,18 @@ import path from "path";
 import type { PrismaClient } from "@prisma/client";
 
 import { getUploadsDir } from "./uploadStorage";
+import { deleteObject } from "./storage";
 
 type AssetRecord = {
   id: string;
   siteId: string;
   url: string;
+  storageProvider?: string | null;
+  storageKey?: string | null;
+  bucket?: string | null;
+  publicUrl?: string | null;
+  visibility?: string | null;
+  checksum?: string | null;
   filename: string;
   mimeType: string;
   size: number;
@@ -20,7 +27,7 @@ type AssetRecord = {
 function toAssetResponse(asset: AssetRecord) {
   return {
     id: asset.id,
-    url: asset.url,
+    url: asset.publicUrl || asset.url,
     filename: asset.filename,
     mimeType: asset.mimeType,
     size: asset.size,
@@ -53,6 +60,12 @@ export async function createAdminAsset(
   options: {
     siteId: string;
     url: string;
+    storageProvider?: string | null;
+    storageKey?: string | null;
+    bucket?: string | null;
+    publicUrl?: string | null;
+    visibility?: string | null;
+    checksum?: string | null;
     filename: string;
     mimeType: string;
     size: number;
@@ -63,6 +76,12 @@ export async function createAdminAsset(
     data: {
       siteId: options.siteId,
       url: options.url,
+      storageProvider: options.storageProvider ?? null,
+      storageKey: options.storageKey ?? null,
+      bucket: options.bucket ?? null,
+      publicUrl: options.publicUrl ?? options.url,
+      visibility: options.visibility ?? "public",
+      checksum: options.checksum ?? null,
       filename: options.filename,
       mimeType: options.mimeType,
       size: options.size,
@@ -122,11 +141,13 @@ export async function deleteAdminAsset(
     return false;
   }
 
+  const assetUrls = Array.from(new Set([asset.url, asset.publicUrl].filter(Boolean))) as string[];
+
   await prisma.$transaction([
     prisma.siteSettings.updateMany({
       where: {
         siteId: options.siteId,
-        OR: [{ logoUrl: asset.url }, { faviconUrl: asset.url }],
+        OR: assetUrls.flatMap((url) => [{ logoUrl: url }, { faviconUrl: url }]),
       },
       data: {
         logoUrl: null,
@@ -138,8 +159,12 @@ export async function deleteAdminAsset(
     }),
   ]);
 
-  const filePath = path.resolve(getUploadsDir(), getFilenameFromUrl(asset.url));
-  await fs.unlink(filePath).catch(() => undefined);
+  if (asset.storageKey) {
+    await deleteObject(asset.storageKey, asset.visibility === "private" ? "private" : "public").catch(() => undefined);
+  } else {
+    const filePath = path.resolve(getUploadsDir(), getFilenameFromUrl(asset.url));
+    await fs.unlink(filePath).catch(() => undefined);
+  }
 
   return true;
 }

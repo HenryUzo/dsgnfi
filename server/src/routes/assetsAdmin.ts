@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 
@@ -11,6 +12,7 @@ import {
   listAdminAssets,
   updateAdminAsset,
 } from "../services/assetsAdmin";
+import { putObject } from "../services/storage";
 import { upload } from "./uploads";
 
 const router = Router();
@@ -50,6 +52,13 @@ router.get("/", async (req, res) => {
 router.post("/", requireRole(["OWNER", "ADMIN"]), upload.single("file"), async (req, res) => {
   const siteId = getSiteId(req, res);
   if (!siteId) return;
+  const tenantId = req.context?.tenantId;
+  if (!tenantId) {
+    return res.status(500).json({
+      ok: false,
+      error: { message: "Missing admin tenant context." },
+    });
+  }
 
   if (!req.file) {
     return res.status(400).json({
@@ -58,11 +67,27 @@ router.post("/", requireRole(["OWNER", "ADMIN"]), upload.single("file"), async (
     });
   }
 
-  const baseUrl = `${req.protocol}://${req.get("host")}`;
-  const url = `${baseUrl}/uploads/${req.file.filename}`;
+  const stored = await putObject({
+    visibility: "public",
+    tenantId,
+    siteId,
+    category: "asset",
+    ownerId: crypto.randomUUID(),
+    filename: req.file.originalname,
+    body: req.file.buffer,
+    mimeType: req.file.mimetype,
+    sizeBytes: req.file.size,
+  });
+  const url = stored.publicUrl ?? `/uploads/${stored.key}`;
   const asset = await createAdminAsset(prisma, {
     siteId,
     url,
+    storageProvider: stored.provider,
+    storageKey: stored.key,
+    bucket: stored.bucket,
+    publicUrl: stored.publicUrl,
+    visibility: stored.visibility,
+    checksum: stored.checksum,
     filename: req.file.originalname,
     mimeType: req.file.mimetype,
     size: req.file.size,

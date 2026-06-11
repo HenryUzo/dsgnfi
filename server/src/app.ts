@@ -45,7 +45,7 @@ export function createApp() {
   // Stop 304/ETag caching behavior for an API (prevents fetch weirdness)
   app.set("etag", false);
 
-  app.use(express.json({ limit: "12mb" }));
+  app.use(express.json({ limit: "36mb" }));
   app.use(cookieParser());
 
   if (env.NODE_ENV === "development") {
@@ -93,6 +93,13 @@ export function createApp() {
   const adminLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: isProd ? 300 : 10000,
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
+  const adminAiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: isProd ? 60 : 2000,
     standardHeaders: true,
     legacyHeaders: false,
   });
@@ -171,8 +178,8 @@ export function createApp() {
   app.use("/public/work", workPublicRouter);
   app.use("/public/process", processPublicRouter);
 
+  app.use("/admin/ai", adminAiLimiter, adminAiRouter);
   app.use("/admin", adminLimiter);
-  app.use("/admin/ai", adminAiRouter);
   app.use("/admin/audit", auditAdminRouter);
   app.use("/admin/cms", cmsAdminRouter);
   app.use("/admin/assets", assetsAdminRouter);

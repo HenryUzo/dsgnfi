@@ -1,11 +1,19 @@
 # env
-server/.env
-app/.env.local
 .env
-.env.local
+.env*
+server/.env
+server/.env.*
+app/.env
+app/.env.*
+!server/.env.example
+!app/.env.example
 
 # deps
 node_modules/
+server/node_modules/
+app/node_modules/
+.pnp/
+.pnp.*
 
 # builds
 dist/
@@ -13,12 +21,22 @@ build/
 .vite/
 .next/
 out/
+coverage/
+storybook-static/
+*.tsbuildinfo
+server/generated/
+server/prisma/generated/
+server/node_modules/.prisma/
 
 # logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+*.log
+server/tmp-*.log
+app/tmp-*.log
+vercel-*.log
 
 # OS
 .DS_Store
@@ -26,12 +44,37 @@ Thumbs.db
 
 # uploads / runtime
 server/uploads/
+uploads/
+.local-postgres/
+*.sqlite
+*.sqlite3
+*.db
+cookies.txt
+tmp-cookies.txt
+tmp-*-cookies.txt
+login.json
+tmp-login.json
+tmp-*.json
+tmp-*.sql
+tmp-*.png
+tmp-*.jpg
+tmp-*.jpeg
+tmp-*.webp
+tmp-*.zip
+tmp-*/
+tmp-*.html
+tmp-*.gif
+tmp-chrome-*/
+tmp-edge-*/
+browser-profiles/
+playwright-report/
+test-results/
+server/tmp-*.log
+server/tmp-*.json
+server/tmp-*.js
+server/tmp-*.txt
 
 # Local Netlify folder
 .netlify
-.env*
 .vercel/
 .vercel
-.env*.local
-!server/.env.example
-!app/.env.example
