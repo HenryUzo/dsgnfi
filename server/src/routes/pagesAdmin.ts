@@ -9,6 +9,9 @@ import { withAdminSiteContext } from "../middleware/withAdminSiteContext";
 import { MissingOpenAIKeyError } from "../services/adminAi";
 import {
   createPagePrefillSuggestions,
+  deletePrefillRunArtifactsNow,
+  getLatestPagePrefillReview,
+  getPagePrefillReviewByRun,
   getTemporaryPrefillArtifacts,
   persistPagePrefillSuggestions,
   recordPrefillApplication,
@@ -417,6 +420,31 @@ router.post("/:pageKey/publish", requireRole(["OWNER", "ADMIN", "EDITOR"]), asyn
   return res.json({ ok: true, page: result.page });
 });
 
+router.get("/:pageKey/ai/prefill/latest", async (req, res) => {
+  const siteId = getSiteId(req, res);
+  const adminId = getAdminId(req, res);
+  const tenantId = req.context?.tenantId;
+  if (!siteId || !adminId || !tenantId) return;
+
+  const parsedParams = pageParamsSchema.safeParse(req.params);
+  if (!parsedParams.success) {
+    return res.status(400).json({
+      ok: false,
+      error: { code: "validation_failed", message: "Invalid page key." },
+    });
+  }
+
+  const review = await getLatestPagePrefillReview({
+    prisma,
+    adminId,
+    tenantId,
+    siteId,
+    pageKey: parsedParams.data.pageKey,
+  });
+
+  return res.json({ ok: true, suggestions: review });
+});
+
 router.post("/:pageKey/ai/prefill", requireRole(["OWNER", "ADMIN", "EDITOR"]), async (req, res) => {
   const siteId = getSiteId(req, res);
   const adminId = getAdminId(req, res);
@@ -518,6 +546,18 @@ router.post("/:pageKey/ai/prefill", requireRole(["OWNER", "ADMIN", "EDITOR"]), a
         ),
       },
     });
+
+    if (runId) {
+      const review = await getPagePrefillReviewByRun({
+        prisma,
+        adminId,
+        tenantId,
+        siteId,
+        pageKey: page.pageKey,
+        runId,
+      });
+      return res.json({ ok: true, suggestions: review ?? persistedSuggestions });
+    }
 
     return res.json({ ok: true, suggestions: persistedSuggestions });
   } catch (error) {
@@ -636,6 +676,51 @@ router.post("/:pageKey/ai/prefill/:runId/reject", requireRole(["OWNER", "ADMIN",
   });
 
   return res.json({ ok: true });
+});
+
+router.delete("/:pageKey/ai/prefill/:runId/brief", requireRole(["OWNER", "ADMIN", "EDITOR"]), async (req, res) => {
+  const siteId = getSiteId(req, res);
+  const adminId = getAdminId(req, res);
+  const tenantId = req.context?.tenantId;
+  if (!siteId || !adminId || !tenantId) return;
+
+  const parsedParams = prefillRunParamsSchema.safeParse(req.params);
+  if (!parsedParams.success) {
+    return res.status(400).json({
+      ok: false,
+      error: { code: "validation_failed", message: "Invalid prefill run." },
+    });
+  }
+
+  const result = await deletePrefillRunArtifactsNow({
+    prisma,
+    adminId,
+    tenantId,
+    siteId,
+    pageKey: parsedParams.data.pageKey,
+    runId: parsedParams.data.runId,
+  });
+
+  if (result.type === "not_found") {
+    return res.status(404).json({
+      ok: false,
+      error: { code: "prefill_run_not_found", message: "Prefill run not found." },
+    });
+  }
+
+  await writeAuditLog(prisma, {
+    actorAdminUserId: adminId,
+    siteId,
+    action: "ai_prefill.deleted",
+    entityType: "AiPrefillRun",
+    entityId: parsedParams.data.runId,
+    metadata: {
+      pageKey: parsedParams.data.pageKey,
+      deletedArtifactCount: result.deletedCount,
+    },
+  });
+
+  return res.json({ ok: true, suggestions: result.review });
 });
 
 router.get("/:pageKey/history", async (req, res) => {

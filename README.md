@@ -123,6 +123,13 @@ AI guide chat is read-only. AI prefill suggestions are draft-only and require ex
 
 AI prefill brief files are private storage objects. They are not served from `/uploads` and should only be exposed later through short-lived signed URLs if an admin download/preview flow is added.
 
+AI prefill retention:
+
+- Raw uploaded briefs are retained in private storage for 30 days by default.
+- Admins can delete retained raw briefs immediately from the Page Editor review flow.
+- Generated suggestions, review state, and apply/reject audit history remain persisted even after the raw brief file is deleted.
+- Applying AI suggestions updates the editable page draft only. Published revisions remain unchanged until an admin explicitly publishes.
+
 ## Storage
 
 The server uses a storage abstraction for public CMS uploads, template-import assets, and private AI prefill brief artifacts.
@@ -132,6 +139,11 @@ Local development uses `STORAGE_PROVIDER=local`. Public files are written under 
 Private files, currently AI prefill briefs, are written under `STORAGE_LOCAL_PRIVATE_DIR` and are not mounted with `express.static`. Do not place private storage under the public upload root.
 
 Production should use `STORAGE_PROVIDER=s3` with an S3/R2-compatible bucket. Public CMS assets can be served through `STORAGE_PUBLIC_BASE_URL`; private AI prefill artifacts should stay private and use signed reads only when needed by the server.
+
+Storage smoke result:
+
+- Public asset upload, private AI brief upload, server-side reads, and object deletion were verified against a real R2/S3 bucket.
+- Public browser delivery also passed once `STORAGE_PUBLIC_BASE_URL` was pointed at a real public asset host instead of the Cloudflare dashboard URL.
 
 ## Template Import Notes
 

@@ -12,6 +12,7 @@ Private files:
 - Documents used only for AI analysis.
 
 Private files must not be served from `/uploads`. The current implementation stores local private files outside the public upload root and returns no public URL for them.
+AI prefill raw files are retained for 30 days by default and can be deleted immediately from the admin review flow while keeping generated suggestions and audit history.
 
 ## Local Development
 
@@ -42,6 +43,14 @@ STORAGE_PUBLIC_BASE_URL=https://cdn.example.com
 ```
 
 S3 credentials are required only when `STORAGE_PROVIDER=s3`. Do not commit them.
+
+Storage smoke testing has passed against a real R2/S3 bucket for:
+
+- public asset upload and delete
+- private AI prefill upload and signed/server-side read
+- object cleanup after delete
+
+Public asset delivery still depends on `STORAGE_PUBLIC_BASE_URL` pointing to a real public asset host or custom domain.
 
 ## Compatibility
 

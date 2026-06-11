@@ -11,6 +11,7 @@ import {
   type AdminAiContext,
 } from "../services/adminAi";
 import {
+  cleanupExpiredPrefillArtifacts,
   storeTemporaryPrefillArtifacts,
   type PrefillArtifactInput,
 } from "../services/adminAiPrefill";
@@ -204,6 +205,8 @@ router.post("/prefill-artifacts", async (req, res) => {
       },
     });
   }
+
+  await cleanupExpiredPrefillArtifacts(prisma);
 
   const result = await storeTemporaryPrefillArtifacts({
     prisma,

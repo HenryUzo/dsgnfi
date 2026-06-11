@@ -355,7 +355,7 @@ describe("Sprint 5A site presentation", () => {
 
     expect(uploadResponse.status).toBe(201);
     expect(uploadResponse.body.asset.filename).toBe("logo.png");
-    expect(uploadResponse.body.asset.url).toContain("/uploads/");
+    expect(uploadResponse.body.asset.url).toMatch(/logo\.png$/);
 
     const listResponse = await request(app)
       .get("/admin/assets")

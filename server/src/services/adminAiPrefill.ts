@@ -18,7 +18,7 @@ import { deleteObject, getObjectBytes, putObject } from "./storage";
 
 const MAX_PREFILL_FILES = 3;
 const MAX_PREFILL_FILE_BYTES = 8 * 1024 * 1024;
-const PREFILL_ARTIFACT_TTL_MS = 24 * 60 * 60 * 1000;
+const PREFILL_ARTIFACT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
 const acceptedMimeTypes = new Set([
   "application/pdf",
@@ -174,6 +174,20 @@ type TemporaryPrefillArtifact = {
   expiresAt: Date;
 };
 
+export type PrefillArtifactSummary = {
+  id: string;
+  runId: string;
+  name: string;
+  mimeType: string;
+  kind: "text" | "document" | "image";
+  sizeBytes: number;
+  status: "ACTIVE" | "EXPIRED" | "DELETED";
+  expiresAt: string;
+  retainedUntil: string | null;
+  deletedAt: string | null;
+  hasExtractedText: boolean;
+};
+
 export type PrefillArtifactInput = {
   name: string;
   mimeType: string;
@@ -182,6 +196,8 @@ export type PrefillArtifactInput = {
 
 export type PagePrefillSuggestion = {
   runId?: string;
+  generatedAt?: string | null;
+  artifacts?: PrefillArtifactSummary[];
   analysis?: BriefContentAnalysis | null;
   page: {
     title?: string | null;
@@ -255,6 +271,34 @@ function summarizeExtractedText(value: string | null) {
     return null;
   }
   return normalizeInlineText(value).slice(0, 900);
+}
+
+function toArtifactSummary(artifact: {
+  id: string;
+  runId: string;
+  fileName: string;
+  mimeType: string;
+  kind: string;
+  sizeBytes: number;
+  status: string;
+  expiresAt: Date;
+  retainedUntil: Date | null;
+  deletedAt: Date | null;
+  extractedText: string | null;
+}): PrefillArtifactSummary {
+  return {
+    id: artifact.id,
+    runId: artifact.runId,
+    name: artifact.fileName,
+    mimeType: artifact.mimeType,
+    kind: artifact.kind as PrefillArtifactSummary["kind"],
+    sizeBytes: artifact.sizeBytes,
+    status: artifact.status as PrefillArtifactSummary["status"],
+    expiresAt: artifact.expiresAt.toISOString(),
+    retainedUntil: artifact.retainedUntil ? artifact.retainedUntil.toISOString() : null,
+    deletedAt: artifact.deletedAt ? artifact.deletedAt.toISOString() : null,
+    hasExtractedText: Boolean(artifact.extractedText),
+  };
 }
 
 async function writePrefillFile(options: {
@@ -443,7 +487,7 @@ export async function storeTemporaryPrefillArtifacts(options: {
     });
   }
 
-  const expiresAt = new Date(Date.now() + PREFILL_ARTIFACT_TTL_MS);
+  const expiresAt = new Date(Date.now() + PREFILL_ARTIFACT_RETENTION_MS);
   const run = await options.prisma.aiPrefillRun.create({
     data: {
       adminId: options.adminId,
@@ -500,16 +544,7 @@ export async function storeTemporaryPrefillArtifacts(options: {
       },
     });
 
-    stored.push({
-      id: artifact.id,
-      runId: run.id,
-      name: artifact.fileName,
-      mimeType: artifact.mimeType,
-      kind: artifact.kind as TemporaryPrefillArtifact["kind"],
-      sizeBytes: artifact.sizeBytes,
-      expiresAt: artifact.expiresAt.toISOString(),
-      hasExtractedText: Boolean(artifact.extractedText),
-    });
+    stored.push(toArtifactSummary(artifact));
   }
 
   return { type: "success" as const, runId: run.id, artifacts: stored };
@@ -1050,10 +1085,14 @@ function buildDeterministicBlitHomepageFallback(options: {
 }
 
 export async function cleanupExpiredPrefillArtifacts(prisma: PrismaClient) {
+  const now = new Date();
   const expired = await prisma.aiPrefillArtifact.findMany({
     where: {
       status: "ACTIVE",
-      expiresAt: { lte: new Date() },
+      OR: [
+        { retainedUntil: { lte: now } },
+        { retainedUntil: null, expiresAt: { lte: now } },
+      ],
     },
     select: { id: true, storageKey: true, visibility: true },
   });
@@ -1065,14 +1104,18 @@ export async function cleanupExpiredPrefillArtifacts(prisma: PrismaClient) {
   if (expired.length > 0) {
     await prisma.aiPrefillArtifact.updateMany({
       where: { id: { in: expired.map((artifact) => artifact.id) } },
-      data: { status: "EXPIRED", deletedAt: new Date() },
+      data: {
+        status: "EXPIRED",
+        deletedAt: now,
+        extractedText: null,
+      },
     });
   }
 
   await prisma.aiPrefillRun.updateMany({
     where: {
       status: { in: ["UPLOADED", "GENERATED"] },
-      expiresAt: { lte: new Date() },
+      expiresAt: { lte: now },
     },
     data: { status: "EXPIRED" },
   });
@@ -1120,6 +1163,190 @@ export async function getTemporaryPrefillArtifacts(options: {
       expiresAt: artifact.expiresAt,
     }))
   );
+}
+
+function jsonRecord(value: unknown) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function hydratePersistedPrefillRun(run: {
+  id: string;
+  generatedAt: Date | null;
+  analysis: unknown;
+  pageSuggestion: unknown;
+  suggestions: Array<{
+    id: string;
+    blockId: string | null;
+    blockType: string | null;
+    label: string;
+    summary: string;
+    dataPatch: unknown;
+    confidence: number | null;
+    notes: string | null;
+    status: string;
+  }>;
+  artifacts: Array<{
+    id: string;
+    runId: string;
+    fileName: string;
+    mimeType: string;
+    kind: string;
+    sizeBytes: number;
+    status: string;
+    expiresAt: Date;
+    retainedUntil: Date | null;
+    deletedAt: Date | null;
+    extractedText: string | null;
+  }>;
+}): PagePrefillSuggestion {
+  const analysis = sanitizeAnalysis(run.analysis as BriefContentAnalysis | undefined, null);
+  const pageSuggestion = jsonRecord(run.pageSuggestion);
+
+  return {
+    runId: run.id,
+    generatedAt: run.generatedAt?.toISOString() ?? null,
+    analysis,
+    artifacts: run.artifacts.map(toArtifactSummary),
+    page: {
+      title: typeof pageSuggestion.title === "string" ? pageSuggestion.title : null,
+      seoTitle: typeof pageSuggestion.seoTitle === "string" ? pageSuggestion.seoTitle : null,
+      seoDescription:
+        typeof pageSuggestion.seoDescription === "string" ? pageSuggestion.seoDescription : null,
+    },
+    blocks: run.suggestions
+      .filter((suggestion) => suggestion.status === "PENDING")
+      .map((suggestion) => ({
+        id: suggestion.id,
+        blockId: suggestion.blockId ?? "",
+        blockType: suggestion.blockType ?? "unknown",
+        label: suggestion.label,
+        summary: suggestion.summary,
+        dataPatch: jsonRecord(suggestion.dataPatch),
+        confidence: suggestion.confidence ?? 0,
+        notes: suggestion.notes,
+      }))
+      .filter((suggestion) => suggestion.blockId),
+  };
+}
+
+export async function getPagePrefillReviewByRun(options: {
+  prisma: PrismaClient;
+  adminId: string;
+  tenantId: string;
+  siteId: string;
+  pageKey: string;
+  runId: string;
+}) {
+  await cleanupExpiredPrefillArtifacts(options.prisma);
+
+  const run = await options.prisma.aiPrefillRun.findFirst({
+    where: {
+      id: options.runId,
+      adminId: options.adminId,
+      tenantId: options.tenantId,
+      siteId: options.siteId,
+      pageKey: options.pageKey,
+    },
+    include: {
+      artifacts: {
+        orderBy: { createdAt: "asc" },
+      },
+      suggestions: {
+        orderBy: { createdAt: "asc" },
+      },
+    },
+  });
+
+  if (!run) {
+    return null;
+  }
+
+  return hydratePersistedPrefillRun(run);
+}
+
+export async function getLatestPagePrefillReview(options: {
+  prisma: PrismaClient;
+  adminId: string;
+  tenantId: string;
+  siteId: string;
+  pageKey: string;
+}) {
+  await cleanupExpiredPrefillArtifacts(options.prisma);
+
+  const latestRun = await options.prisma.aiPrefillRun.findFirst({
+    where: {
+      adminId: options.adminId,
+      tenantId: options.tenantId,
+      siteId: options.siteId,
+      pageKey: options.pageKey,
+      status: "GENERATED",
+    },
+    orderBy: [{ generatedAt: "desc" }, { createdAt: "desc" }],
+    select: { id: true },
+  });
+
+  if (!latestRun) {
+    return null;
+  }
+
+  return getPagePrefillReviewByRun({
+    ...options,
+    runId: latestRun.id,
+  });
+}
+
+export async function deletePrefillRunArtifactsNow(options: {
+  prisma: PrismaClient;
+  adminId: string;
+  tenantId: string;
+  siteId: string;
+  pageKey: string;
+  runId: string;
+}) {
+  const now = new Date();
+  const run = await options.prisma.aiPrefillRun.findFirst({
+    where: {
+      id: options.runId,
+      adminId: options.adminId,
+      tenantId: options.tenantId,
+      siteId: options.siteId,
+      pageKey: options.pageKey,
+    },
+    include: {
+      artifacts: {
+        where: { status: "ACTIVE" },
+      },
+    },
+  });
+
+  if (!run) {
+    return { type: "not_found" as const };
+  }
+
+  for (const artifact of run.artifacts) {
+    await deleteObject(artifact.storageKey, artifact.visibility === "public" ? "public" : "private").catch(() => undefined);
+  }
+
+  if (run.artifacts.length > 0) {
+    await options.prisma.aiPrefillArtifact.updateMany({
+      where: { id: { in: run.artifacts.map((artifact) => artifact.id) } },
+      data: {
+        status: "DELETED",
+        retainedUntil: now,
+        deletedAt: now,
+        extractedText: null,
+      },
+    });
+  }
+
+  const review = await getPagePrefillReviewByRun(options);
+  return {
+    type: "success" as const,
+    review,
+    deletedCount: run.artifacts.length,
+  };
 }
 
 const prefillResponseSchema: ResponseFormatTextJSONSchemaConfig = {
