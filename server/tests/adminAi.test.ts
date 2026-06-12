@@ -41,6 +41,9 @@ const mockPrisma = {
   siteDomain: {
     findFirst: vi.fn(),
   },
+  auditLog: {
+    create: vi.fn(),
+  },
 };
 
 vi.mock("../src/db/prisma", () => ({
@@ -86,6 +89,7 @@ beforeEach(() => {
   });
   mockPrisma.site.findUnique.mockResolvedValue(null);
   mockPrisma.siteDomain.findFirst.mockResolvedValue(null);
+  mockPrisma.auditLog.create.mockResolvedValue({});
   openAiMocks.responsesCreate.mockResolvedValue({
     output_text: JSON.stringify({
       intro: "You're on Page Editor.",
@@ -181,7 +185,13 @@ describe("admin AI guide chat", () => {
           intro: "You're on Page Editor.",
           steps: ["Open Pages.", "Choose the page.", "Save the draft, then publish."],
           note: "This assistant can guide you, but it does not publish for you.",
-          links: [{ label: "Open Pages", href: "/admin/pages" }],
+          why: "Publishing happens from the page editor or the Pages list after saving draft changes.",
+          intentId: "publish_page",
+          primaryLink: { label: "Open page editor", href: "/admin/pages/about" },
+          links: [
+            { label: "Open page editor", href: "/admin/pages/about" },
+            { label: "Pages", href: "/admin/pages" },
+          ],
         },
       },
     });
@@ -214,6 +224,28 @@ describe("admin AI guide chat", () => {
     expect(requestPayload.instructions).toContain("You are read-only");
     expect(requestPayload.instructions).toContain("Route: /admin/pages/about");
     expect(requestPayload.instructions).toContain("Current block types: hero, richText");
+    expect(requestPayload.instructions).toContain("Guide metadata JSON");
+    expect(requestPayload.instructions).toContain("\"id\":\"publish_page\"");
+    expect(mockPrisma.auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        actorAdminUserId: "admin-1",
+        siteId: "site-1",
+        action: "AI_GUIDE_REQUESTED",
+        entityType: "AdminAiGuide",
+        entityId: "publish_page",
+        metadata: expect.objectContaining({
+          route: "/admin/pages/about",
+          screenTitle: "Page Editor",
+          messageCount: 1,
+          attachmentCount: 0,
+          intentId: "publish_page",
+          returnedLinkCount: 2,
+        }),
+      }),
+    });
+    expect(JSON.stringify(mockPrisma.auditLog.create.mock.calls[0]?.[0])).not.toContain(
+      "How do I publish this page?"
+    );
   });
 
   it("passes image and document attachments into the latest user message", async () => {
@@ -261,8 +293,7 @@ describe("admin AI guide chat", () => {
           },
           {
             type: "input_file",
-            detail: "high",
-            file_data: "cGRm",
+            file_data: "data:application/pdf;base64,cGRm",
             filename: "brief.pdf",
           },
         ],
@@ -270,5 +301,265 @@ describe("admin AI guide chat", () => {
     ]);
     expect(requestPayload.instructions).toContain("image: layout.png (image/png)");
     expect(requestPayload.instructions).toContain("document: brief.pdf (application/pdf)");
+  });
+
+  it.each([
+    ["How do I edit navigation?", "edit_navigation", "/admin/site-settings"],
+    ["How do I add a custom domain?", "manage_domains", "/admin/site-settings"],
+    ["How do I import a template?", "manage_templates", "/admin/templates"],
+    ["How do I switch site?", "switch_site", "/admin/sites"],
+    ["How do I create a new site?", "create_site", "/admin/sites"],
+    ["How do I manage work projects?", "manage_work", "/admin/work"],
+    ["How do I update process capabilities?", "manage_process", "/admin/process"],
+  ])("returns deterministic route for %s", async (prompt, intentId, href) => {
+    process.env.OPENAI_API_KEY = "test-openai-key";
+    const app = await createTestApp();
+
+    const response = await request(app)
+      .post("/admin/ai/chat")
+      .set("Cookie", await createAdminCookie())
+      .send({
+        messages: [{ role: "user", content: prompt }],
+        context: { route: "/admin", screenTitle: "Dashboard" },
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.message.guide.intentId).toBe(intentId);
+    expect(response.body.message.guide.primaryLink.href).toBe(href);
+    expect(response.body.message.guide.links.every((link: { href: string }) => link.href.startsWith("/admin"))).toBe(true);
+  });
+
+  it("keeps responding when the optional audit client is unavailable", async () => {
+    process.env.OPENAI_API_KEY = "test-openai-key";
+    const auditLog = mockPrisma.auditLog;
+    (mockPrisma as { auditLog?: unknown }).auditLog = undefined;
+    const app = await createTestApp();
+
+    const response = await request(app)
+      .post("/admin/ai/chat")
+      .set("Cookie", await createAdminCookie())
+      .send({
+        messages: [{ role: "user", content: "How do I publish?" }],
+        context: { route: "/admin/pages", screenTitle: "Pages" },
+      });
+
+    expect(response.status).toBe(200);
+    (mockPrisma as { auditLog?: unknown }).auditLog = auditLog;
+  });
+});
+
+describe("admin AI page prefill", () => {
+  const companyProfileText = [
+    "DSGNFI STUDIO",
+    "Company Profile",
+    "Positioning Statement",
+    "We help businesses become clearer, more visible, and more trusted through strategy-led creative work, digital campaigns, and modern web experiences.",
+    "1. About Dsgnfi Studio",
+    "Dsgnfi Studio is a creative digital studio that helps businesses build strong, professional, and memorable brands through digital marketing, brand design, and web development.",
+    "2.1 Digital Marketing",
+    "We help businesses promote their products and services online using strategy, content, paid advertising, and performance tracking.",
+    "2.2 Brand Design",
+    "We create visual identities that help businesses stand out, look professional, and build trust with customers.",
+    "2.3 Web Development",
+    "We design and build websites that help businesses present themselves professionally and convert visitors into customers.",
+    "Who We Work With",
+    "Startups, SMEs, personal brands, service businesses, corporate teams, and growing organizations.",
+    "Value Promise",
+    "We connect brand clarity, digital visibility, and web performance into one coherent growth system.",
+  ].join("\n");
+
+  const blitHomePage = {
+    pageKey: "home",
+    title: "Home",
+    slug: "/",
+    seoTitle: null,
+    seoDescription: null,
+    allowedBlockTypes: ["blitHeroCollage", "blitFeaturedWork", "blitEditorialStatement", "blitCapabilitiesGrid", "blitHorizontalGallery", "blitFinalStatement"],
+    blocks: [
+      {
+        id: "blit-home-hero",
+        type: "blitHeroCollage",
+        data: {
+          eyebrow: "Blit Studio",
+          headline: "the intersection between design, art, and technology",
+          caption: "Creative technology studio for immersive events and interactive storytelling.",
+          images: [{ imageUrl: "/assets/hero.jpg", alt: "Hero" }],
+        },
+      },
+      {
+        id: "blit-home-featured",
+        type: "blitFeaturedWork",
+        data: {
+          heading: "featured work",
+          title: "Selected projects",
+          ctaLabel: "See all projects",
+          ctaHref: "/works",
+          projects: [
+            { title: "ECHOES", category: "Installation", description: "Old", image: "/assets/echoes.jpg", href: "/work/echoes" },
+            { title: "BMW", category: "Event", description: "Old", image: "/assets/bmw.jpg", href: "/work/bmw" },
+          ],
+        },
+      },
+      {
+        id: "blit-home-editorial",
+        type: "blitEditorialStatement",
+        data: { eyebrow: "Studio statement", title: "Old title", body: "Old body" },
+      },
+      {
+        id: "blit-home-capabilities",
+        type: "blitCapabilitiesGrid",
+        data: {
+          heading: "capabilities",
+          imageUrl: "/assets/capabilities.jpg",
+          items: [
+            { title: "Old", description: "Old", imageUrl: "/assets/digital.jpg", imageAlt: "Digital" },
+            { title: "Old", description: "Old", imageUrl: "/assets/brand.jpg", imageAlt: "Brand" },
+            { title: "Old", description: "Old", imageUrl: "/assets/web.jpg", imageAlt: "Web" },
+          ],
+        },
+      },
+      {
+        id: "blit-home-final",
+        type: "blitFinalStatement",
+        data: { title: "old final" },
+      },
+    ],
+  };
+
+  function testArtifact() {
+    return {
+      id: "artifact-1",
+      adminId: "admin-1",
+      tenantId: "tenant-1",
+      siteId: "site-1",
+      pageKey: "home",
+      name: "Dsgnfi_Studio_Company_Profile.docx",
+      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      kind: "document" as const,
+      sizeBytes: 1234,
+      dataUrl: "data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,ZmFrZQ==",
+      extractedText: companyProfileText,
+      createdAt: Date.now(),
+      expiresAt: Date.now() + 60_000,
+    };
+  }
+
+  it("returns interpreted analysis and sanitized multi-block suggestions for unordered company briefs", async () => {
+    process.env.OPENAI_API_KEY = "test-openai-key";
+    openAiMocks.responsesCreate.mockResolvedValueOnce({
+      output_text: JSON.stringify({
+        analysis: {
+          brandName: "DSGNFI Studio",
+          positioning: "A creative digital studio helping businesses build clearer brands, stronger campaigns, and modern web experiences.",
+          audience: ["Startups", "SMEs", "Service businesses"],
+          services: ["Digital Marketing", "Brand Design", "Web Development"],
+          tone: "clear, professional, strategy-led",
+          notes: ["The brief maps service content into homepage capabilities and featured sections."],
+        },
+        page: {
+          title: null,
+          seoTitle: companyProfileText.slice(0, 150),
+          seoDescription: "DSGNFI Studio helps businesses clarify their brand, improve visibility, and build modern web experiences.",
+        },
+        blocks: [
+          {
+            blockId: "blit-home-hero",
+            blockType: "blitHeroCollage",
+            label: "Blit Hero Collage",
+            summary: "Uses the positioning statement for the hero.",
+            dataPatchJson: JSON.stringify({
+              eyebrow: "DSGNFI Studio",
+              headline: "clearer brands, stronger campaigns, modern web experiences",
+              caption: "A creative digital studio helping businesses become clearer, more visible, and more trusted.",
+            }),
+            confidence: 0.91,
+            notes: "Mapped from positioning.",
+          },
+          {
+            blockId: "blit-home-featured",
+            blockType: "blitFeaturedWork",
+            label: "Blit Featured Work",
+            summary: "Converts service pillars into featured cards.",
+            dataPatchJson: JSON.stringify({
+              heading: "what we do",
+              title: "Strategy-led creative services",
+              projects: [
+                { title: "Digital Marketing", category: "Service", description: "Campaigns, content, paid advertising, and performance tracking." },
+                { title: "Brand Design", category: "Service", description: "Identity systems, brand guidelines, and marketing assets." },
+              ],
+            }),
+            confidence: 0.86,
+            notes: "Existing media should be preserved.",
+          },
+          {
+            blockId: "blit-home-capabilities",
+            blockType: "blitCapabilitiesGrid",
+            label: "Blit Capabilities Grid",
+            summary: "Maps service lines into capabilities.",
+            dataPatchJson: JSON.stringify({
+              heading: "capabilities",
+              items: [
+                { title: "Digital Marketing", description: "Clear campaigns that turn attention into business opportunities." },
+                { title: "Brand Design", description: "Identity systems that make businesses look credible and consistent." },
+                { title: "Web Development", description: "Modern websites built to convert visitors into customers." },
+              ],
+            }),
+            confidence: 0.9,
+            notes: "Service content is explicit in the brief.",
+          },
+        ],
+      }),
+    });
+    const { createPagePrefillSuggestions } = await import("../src/services/adminAiPrefill");
+
+    const suggestions = await createPagePrefillSuggestions({
+      adminId: "admin-1",
+      artifacts: [testArtifact()],
+      page: blitHomePage,
+    });
+
+    expect(suggestions.analysis?.brandName).toBe("DSGNFI Studio");
+    expect(suggestions.blocks.map((block) => block.blockType)).toEqual([
+      "blitHeroCollage",
+      "blitFeaturedWork",
+      "blitCapabilitiesGrid",
+      "blitEditorialStatement",
+      "blitFinalStatement",
+    ]);
+    expect(suggestions.page.seoTitle).not.toContain("Positioning Statement");
+    expect(suggestions.page.seoTitle?.length).toBeLessThanOrEqual(72);
+    const featured = suggestions.blocks.find((block) => block.blockType === "blitFeaturedWork");
+    const projects = featured?.dataPatch.projects as Array<{ image?: string; href?: string }>;
+    expect(projects[0]?.image).toBe("/assets/echoes.jpg");
+    expect(projects[0]?.href).toBe("/work/echoes");
+  });
+
+  it("uses deterministic fallback only when model output has no valid block patches", async () => {
+    process.env.OPENAI_API_KEY = "test-openai-key";
+    openAiMocks.responsesCreate.mockResolvedValueOnce({
+      output_text: JSON.stringify({
+        analysis: {
+          brandName: "DSGNFI Studio",
+          positioning: "A creative digital studio for brand, marketing, and web growth.",
+          audience: [],
+          services: ["Digital Marketing", "Brand Design", "Web Development"],
+          tone: "professional",
+          notes: ["Brief was interpreted."],
+        },
+        page: { title: null, seoTitle: null, seoDescription: null },
+        blocks: [],
+      }),
+    });
+    const { createPagePrefillSuggestions } = await import("../src/services/adminAiPrefill");
+
+    const suggestions = await createPagePrefillSuggestions({
+      adminId: "admin-1",
+      artifacts: [testArtifact()],
+      page: blitHomePage,
+    });
+
+    expect(suggestions.blocks.length).toBeGreaterThanOrEqual(3);
+    expect(suggestions.analysis?.services).toContain("Digital Marketing");
+    expect(openAiMocks.responsesCreate).toHaveBeenCalledTimes(1);
   });
 });

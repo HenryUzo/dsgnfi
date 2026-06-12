@@ -26,6 +26,8 @@ Thumbs.db
 
 # uploads / runtime
 server/uploads/
+.local-postgres/
+.local-postgres/*.log
 
 # Local Netlify folder
 .netlify

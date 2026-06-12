@@ -280,9 +280,36 @@ describe("Sprint 5A site presentation", () => {
         },
       ],
       pages: [
-        { siteId: "site-main", pageKey: "work", slug: "work", currentPublishedRevisionId: "rev-work-main" },
-        { siteId: "site-main", pageKey: "contact", slug: "contact", currentPublishedRevisionId: "rev-contact-main" },
-        { siteId: "site-branch", pageKey: "contact", slug: "contact", currentPublishedRevisionId: "rev-contact-branch" },
+        {
+          siteId: "site-main",
+          pageKey: "work",
+          title: "Work",
+          slug: "work",
+          currentPublishedRevisionId: "rev-work-main",
+          isVisible: true,
+          hierarchyRole: "MAIN",
+          defaultParentPageKey: null,
+        },
+        {
+          siteId: "site-main",
+          pageKey: "contact",
+          title: "Contact",
+          slug: "contact",
+          currentPublishedRevisionId: "rev-contact-main",
+          isVisible: true,
+          hierarchyRole: "MAIN",
+          defaultParentPageKey: null,
+        },
+        {
+          siteId: "site-branch",
+          pageKey: "contact",
+          title: "Contact",
+          slug: "contact",
+          currentPublishedRevisionId: "rev-contact-branch",
+          isVisible: true,
+          hierarchyRole: "MAIN",
+          defaultParentPageKey: null,
+        },
       ],
       assets: [
         {
@@ -328,7 +355,7 @@ describe("Sprint 5A site presentation", () => {
 
     expect(uploadResponse.status).toBe(201);
     expect(uploadResponse.body.asset.filename).toBe("logo.png");
-    expect(uploadResponse.body.asset.url).toContain("/uploads/");
+    expect(uploadResponse.body.asset.url).toMatch(/logo\.png$/);
 
     const listResponse = await request(app)
       .get("/admin/assets")

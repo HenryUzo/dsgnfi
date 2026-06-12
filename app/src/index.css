@@ -1,0 +1,604 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --radius: 0.625rem;
+  --background: 0 0% 0%;
+  --foreground: 0 0% 100%;
+  --card: 0 0% 5%;
+  --card-foreground: 0 0% 100%;
+  --popover: 0 0% 5%;
+  --popover-foreground: 0 0% 100%;
+  --primary: 224 78% 50%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 0 0% 10%;
+  --secondary-foreground: 0 0% 100%;
+  --muted: 0 0% 15%;
+  --muted-foreground: 0 0% 60%;
+  --accent: 224 78% 50%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 0 0% 20%;
+  --input: 0 0% 20%;
+  --ring: 224 78% 50%;
+  --brand: #1a4ce0;
+  --brand-dark: #153db8;
+  --brand-rgb: 26 76 224;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    cursor: none;
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/* Custom cursor styles */
+.custom-cursor {
+  pointer-events: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 9999;
+  mix-blend-mode: difference;
+}
+
+/* Hide default cursor on interactive elements */
+a, button, [role="button"], input, textarea, select {
+  cursor: none;
+}
+
+/* Admin UI: restore default cursor */
+body.admin-ui {
+  cursor: auto !important;
+}
+body.admin-ui * {
+  cursor: auto !important;
+}
+body.admin-ui a,
+body.admin-ui button,
+body.admin-ui [role="button"],
+body.admin-ui select,
+body.admin-ui summary,
+body.admin-ui label:has(select),
+body.admin-ui label:has(button) {
+  cursor: pointer !important;
+}
+body.admin-ui button:disabled,
+body.admin-ui [role="button"][aria-disabled="true"],
+body.admin-ui select:disabled {
+  cursor: not-allowed !important;
+}
+body.admin-ui input,
+body.admin-ui textarea {
+  cursor: text !important;
+}
+
+body.blit-public-page {
+  background: #f2eee4;
+  overflow-x: hidden;
+}
+
+body.blit-public-page #root {
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+body.blit-public-page .site-default-navigation,
+body.blit-public-page .site-default-footer,
+body.blit-public-page .custom-cursor {
+  display: none !important;
+}
+
+body.blit-menu-open {
+  overflow: hidden;
+}
+
+.blit-reveal {
+  position: relative;
+  opacity: 0;
+  transform: translate3d(0, 42px, 0) scale(0.985);
+  clip-path: inset(12% 0 12% 0);
+  filter: saturate(0.72) contrast(0.96);
+  will-change: opacity, transform, clip-path, filter;
+}
+
+.blit-reveal::after {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  opacity: 0;
+  background:
+    linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(244, 81, 30, 0.22) 36%,
+      rgba(255, 255, 255, 0.2) 50%,
+      rgba(21, 19, 15, 0.16) 64%,
+      transparent 100%
+    ),
+    repeating-linear-gradient(
+      to bottom,
+      rgba(21, 19, 15, 0.12) 0 1px,
+      transparent 1px 7px
+    );
+  mix-blend-mode: multiply;
+  transform: translate3d(-115%, 0, 0);
+}
+
+.blit-reveal-visible {
+  animation: blitRetroSectionIn 980ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.blit-reveal-visible::after {
+  animation: blitRetroScanSweep 820ms steps(9, end) 80ms both;
+}
+
+.blit-reveal-visible > * {
+  animation: blitRetroContentIn 760ms cubic-bezier(0.16, 1, 0.3, 1) 90ms both;
+}
+
+.blit-reveal-panel {
+  transform: translateY(72px);
+  transition:
+    opacity 1100ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 1100ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes blitRetroSectionIn {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 42px, 0) scale(0.985) skewY(0.45deg);
+    clip-path: inset(18% 0 16% 0);
+    filter: saturate(0.68) contrast(0.94);
+  }
+
+  18% {
+    opacity: 1;
+    transform: translate3d(0, 22px, 0) scale(0.992) skewY(-0.32deg);
+    clip-path: inset(9% 0 11% 0);
+    filter: saturate(1.18) contrast(1.08);
+  }
+
+  36% {
+    transform: translate3d(0, 10px, 0) scale(1.004) skewY(0.18deg);
+    clip-path: inset(4% 0 6% 0);
+  }
+
+  58% {
+    transform: translate3d(0, 4px, 0) scale(0.998);
+    clip-path: inset(1% 0 2% 0);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+    clip-path: inset(0 0 0 0);
+    filter: saturate(1) contrast(1);
+  }
+}
+
+@keyframes blitRetroContentIn {
+  0% {
+    opacity: 0.72;
+    transform: translate3d(0, 18px, 0);
+  }
+
+  28% {
+    opacity: 1;
+    transform: translate3d(0, -4px, 0);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes blitRetroScanSweep {
+  0% {
+    opacity: 0;
+    transform: translate3d(-115%, 0, 0);
+  }
+
+  12% {
+    opacity: 0.9;
+  }
+
+  72% {
+    opacity: 0.72;
+    transform: translate3d(118%, 0, 0);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate3d(118%, 0, 0);
+  }
+}
+
+.blit-menu-link {
+  opacity: 0;
+  transform: translateY(24px);
+}
+
+body.blit-menu-open .blit-menu-link {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@keyframes blitStudioImageZoom {
+  from {
+    transform: scale(1.02);
+  }
+
+  to {
+    transform: scale(1.12);
+  }
+}
+
+.blit-studio-image-zoom {
+  animation: blitStudioImageZoom 14s ease-out forwards;
+  transform-origin: center center;
+}
+
+@keyframes blitTeamShapeFloat {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+
+  to {
+    transform: translate3d(0, -18px, 0);
+  }
+}
+
+@keyframes blitTeamBarFloat {
+  from {
+    transform: rotate(-45deg) translate3d(0, 0, 0);
+  }
+
+  to {
+    transform: rotate(-45deg) translate3d(10px, -22px, 0);
+  }
+}
+
+.blit-team-shape {
+  will-change: transform;
+  transition: transform 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.blit-awards-verified-sticker {
+  display: block;
+  overflow: visible;
+}
+
+.blit-team-cloud {
+  width: 11.5rem;
+  height: 3.75rem;
+  border: 2px solid rgba(21, 19, 15, 0.28);
+  border-radius: 999px;
+  background:
+    repeating-radial-gradient(circle at 18% 32%, rgba(21, 19, 15, 0.09) 0 1px, transparent 1px 6px),
+    repeating-linear-gradient(135deg, rgba(21, 19, 15, 0.045) 0 1px, transparent 1px 8px),
+    radial-gradient(circle at 28% 15%, rgba(255, 255, 255, 0.78), transparent 36%),
+    linear-gradient(135deg, rgba(242, 238, 228, 0.98), rgba(214, 208, 193, 0.64));
+  box-shadow:
+    0 0 0 2px rgba(242, 238, 228, 0.84),
+    16px 16px 0 rgba(21, 19, 15, 0.08);
+  opacity: 0.7;
+  transform-origin: center;
+}
+
+.blit-team-cloud::before,
+.blit-team-cloud::after {
+  content: "";
+  position: absolute;
+  bottom: 1rem;
+  border: 2px solid rgba(21, 19, 15, 0.28);
+  border-bottom: 0;
+  border-radius: 999px 999px 0 0;
+  background:
+    repeating-radial-gradient(circle at 40% 35%, rgba(21, 19, 15, 0.08) 0 1px, transparent 1px 6px),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(224, 218, 202, 0.76));
+}
+
+.blit-team-cloud::before {
+  left: 1.35rem;
+  width: 3.55rem;
+  height: 3.55rem;
+}
+
+.blit-team-cloud::after {
+  right: 1.55rem;
+  width: 4.25rem;
+  height: 4.25rem;
+}
+
+.blit-team-game-player {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: #f4511e;
+  box-shadow:
+    0 0 0 2px rgba(242, 238, 228, 0.9),
+    8px 8px 0 rgba(21, 19, 15, 0.1);
+  transform: translate(-50%, -50%);
+  transition:
+    left 240ms cubic-bezier(0.16, 1, 0.3, 1),
+    top 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.blit-team-game-trail {
+  width: 14px;
+  height: 58px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to bottom,
+    rgba(21, 19, 15, 0),
+    rgba(21, 19, 15, 0.18) 24%,
+    rgba(21, 19, 15, 0.78) 72%,
+    rgba(21, 19, 15, 0.08)
+  );
+  box-shadow: 6px 10px 0 rgba(21, 19, 15, 0.08);
+  transform: translate(-50%, -100%);
+  animation: blitTeamGameTrail 1800ms steps(5, end) forwards;
+}
+
+@keyframes blitTeamGameTrail {
+  0% {
+    opacity: 0.9;
+    transform: translate(-50%, -100%) scaleY(1);
+  }
+
+  65% {
+    opacity: 0.45;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--blit-team-trail-drift, 20px)), -165%) scaleY(0.28);
+  }
+}
+
+.blit-team-shape-circle {
+  animation: blitTeamShapeFloat 7.2s ease-in-out infinite alternate;
+}
+
+.blit-team-shape-square {
+  animation: blitTeamShapeFloat 8.1s ease-in-out infinite alternate;
+  animation-delay: -2.1s;
+}
+
+.blit-team-shape-bar {
+  animation: blitTeamBarFloat 8.6s ease-in-out infinite alternate;
+  animation-delay: -1.4s;
+}
+
+.blit-hero-pill {
+  animation: blitHeroPillFloat 7.5s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+.blit-hero-pill:nth-child(2) {
+  animation-delay: -2.4s;
+  animation-duration: 8.8s;
+}
+
+.blit-hero-pill:nth-child(3) {
+  animation-delay: -4.1s;
+  animation-duration: 7.9s;
+}
+
+.blit-hero-pill:hover {
+  animation-play-state: paused;
+}
+
+@keyframes blitHeroPillFloat {
+  0% {
+    transform: translate3d(-10px, -12px, 0) rotate(-0.5deg);
+  }
+  50% {
+    transform: translate3d(12px, 10px, 0) rotate(0.35deg);
+  }
+  100% {
+    transform: translate3d(-4px, 18px, 0) rotate(-0.25deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .blit-hero-pill {
+    animation: none;
+  }
+
+  .blit-reveal,
+  .blit-reveal-visible,
+  .blit-reveal-visible > * {
+    animation: none;
+    clip-path: none;
+    filter: none;
+    opacity: 1;
+    transform: none;
+  }
+
+  .blit-reveal::after {
+    display: none;
+  }
+}
+
+/* Serif font for headings */
+.font-serif {
+  font-family: 'Playfair Display', 'Times New Roman', serif;
+}
+
+/* Smooth transitions */
+.transition-smooth {
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Text reveal animation */
+@keyframes textReveal {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+.text-reveal {
+  animation: textReveal 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Rotating text animation */
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.rotate-text {
+  animation: rotate 10s linear infinite;
+}
+
+/* Gradient backgrounds */
+.gradient-blue {
+  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-dark) 100%);
+}
+
+/* Glass effect */
+.glass {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Hide scrollbar but keep functionality */
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Magnetic button effect */
+.magnetic-btn {
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Project card hover */
+.project-card {
+  overflow: hidden;
+}
+.project-card img {
+  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.project-card:hover img {
+  transform: scale(1.05);
+}
+
+/* Accordion animation */
+.accordion-content {
+  overflow: hidden;
+  transition: max-height 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Stagger animation delays */
+.stagger-1 { animation-delay: 0.1s; }
+.stagger-2 { animation-delay: 0.2s; }
+.stagger-3 { animation-delay: 0.3s; }
+.stagger-4 { animation-delay: 0.4s; }
+.stagger-5 { animation-delay: 0.5s; }
+
+/* Line draw animation */
+@keyframes lineDraw {
+  from {
+    stroke-dashoffset: 1000;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.line-draw {
+  stroke-dasharray: 1000;
+  stroke-dashoffset: 1000;
+  animation: lineDraw 2s ease-out forwards;
+}
+
+/* Fade in up animation */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in-up {
+  animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Scale in animation */
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.scale-in {
+  animation: scaleIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Marquee animation */
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.marquee {
+  animation: marquee 20s linear infinite;
+}
+
+/* Glow effect */
+.glow {
+  box-shadow: 0 0 40px rgb(var(--brand-rgb) / 0.3);
+}
+
+/* Noise texture overlay */
+.noise-overlay::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  opacity: 0.03;
+  pointer-events: none;
+  z-index: 1;
+}
