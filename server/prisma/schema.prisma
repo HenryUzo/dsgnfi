@@ -73,55 +73,84 @@ enum ContactSubmissionStatus {
   ARCHIVED
 }
 
+enum AiPrefillRunStatus {
+  UPLOADED
+  GENERATED
+  APPLIED
+  REJECTED
+  EXPIRED
+  FAILED
+}
+
+enum AiPrefillArtifactStatus {
+  ACTIVE
+  EXPIRED
+  DELETED
+}
+
+enum AiPrefillSuggestionStatus {
+  PENDING
+  APPLIED
+  REJECTED
+}
+
 model AdminUser {
-  id           String   @id @default(uuid()) @db.Uuid
-  email        String   @unique
-  passwordHash String
-  createdAt    DateTime @default(now())
-  memberships  Membership[]
-  createdPageRevisions   PageRevision[] @relation("PageRevisionCreatedBy")
-  publishedPageRevisions PageRevision[] @relation("PageRevisionPublishedBy")
-  previewTokens PreviewToken[]
-  auditLogs     AuditLog[] @relation("AuditLogActor")
-  createdTemplates Template[] @relation("TemplateCreatedBy")
+  id                       String                    @id @default(uuid()) @db.Uuid
+  email                    String                    @unique
+  passwordHash             String
+  createdAt                DateTime                  @default(now())
+  memberships              Membership[]
+  createdPageRevisions     PageRevision[]            @relation("PageRevisionCreatedBy")
+  publishedPageRevisions   PageRevision[]            @relation("PageRevisionPublishedBy")
+  previewTokens            PreviewToken[]
+  auditLogs                AuditLog[]                @relation("AuditLogActor")
+  createdTemplates         Template[]                @relation("TemplateCreatedBy")
+  aiPrefillRuns            AiPrefillRun[]
+  aiPrefillArtifacts       AiPrefillArtifact[]
+  aiSuggestionApplications AiSuggestionApplication[]
 }
 
 model Tenant {
-  id          String       @id @default(uuid()) @db.Uuid
-  name        String
-  slug        String       @unique
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  sites       Site[]
-  memberships Membership[]
-  templates   Template[]
+  id                 String              @id @default(uuid()) @db.Uuid
+  name               String
+  slug               String              @unique
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  sites              Site[]
+  memberships        Membership[]
+  templates          Template[]
+  aiPrefillRuns      AiPrefillRun[]
+  aiPrefillArtifacts AiPrefillArtifact[]
 }
 
 model Site {
-  id           String        @id @default(uuid()) @db.Uuid
-  tenantId     String        @db.Uuid
-  templateId   String?       @db.Uuid
-  templateVersionId String?  @db.Uuid
-  name         String
-  slug         String
-  status       SiteStatus    @default(DRAFT)
-  isDefault    Boolean       @default(false)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  template     Template?     @relation(fields: [templateId], references: [id], onDelete: SetNull)
-  templateVersion TemplateVersion? @relation(fields: [templateVersionId], references: [id], onDelete: SetNull)
-  domains      SiteDomain[]
-  settings     SiteSettings?
-  pages        Page[]
-  cmsSections  CmsSection[]
-  workMeta     WorkPageMeta[]
-  workTags     WorkTag[]
-  workProjects WorkProject[]
-  assets       Asset[]
-  previewTokens PreviewToken[]
-  auditLogs    AuditLog[]
-  contactSubmissions ContactSubmission[]
+  id                       String                    @id @default(uuid()) @db.Uuid
+  tenantId                 String                    @db.Uuid
+  templateId               String?                   @db.Uuid
+  templateVersionId        String?                   @db.Uuid
+  name                     String
+  slug                     String
+  status                   SiteStatus                @default(DRAFT)
+  isDefault                Boolean                   @default(false)
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
+  tenant                   Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  template                 Template?                 @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  templateVersion          TemplateVersion?          @relation(fields: [templateVersionId], references: [id], onDelete: SetNull)
+  domains                  SiteDomain[]
+  settings                 SiteSettings?
+  pages                    Page[]
+  cmsSections              CmsSection[]
+  workMeta                 WorkPageMeta[]
+  workTags                 WorkTag[]
+  workProjects             WorkProject[]
+  assets                   Asset[]
+  previewTokens            PreviewToken[]
+  auditLogs                AuditLog[]
+  contactSubmissions       ContactSubmission[]
+  aiPrefillRuns            AiPrefillRun[]
+  aiPrefillArtifacts       AiPrefillArtifact[]
+  aiSuggestionApplications AiSuggestionApplication[]
 
   @@unique([tenantId, slug])
   @@index([tenantId])
@@ -146,35 +175,35 @@ model Membership {
 }
 
 model SiteDomain {
-  id                 String                   @id @default(uuid()) @db.Uuid
-  siteId             String                   @db.Uuid
-  hostname           String                   @unique
-  type               SiteDomainType
-  isPrimary          Boolean                  @default(false)
-  verificationStatus DomainVerificationStatus @default(PENDING)
-  verificationHost   String?
-  verificationValue  String?
-  verifiedAt         DateTime?
+  id                        String                   @id @default(uuid()) @db.Uuid
+  siteId                    String                   @db.Uuid
+  hostname                  String                   @unique
+  type                      SiteDomainType
+  isPrimary                 Boolean                  @default(false)
+  verificationStatus        DomainVerificationStatus @default(PENDING)
+  verificationHost          String?
+  verificationValue         String?
+  verifiedAt                DateTime?
   lastVerificationAttemptAt DateTime?
-  lastVerificationError String?
-  createdAt          DateTime                 @default(now())
-  updatedAt          DateTime                 @updatedAt
-  site               Site                     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  lastVerificationError     String?
+  createdAt                 DateTime                 @default(now())
+  updatedAt                 DateTime                 @updatedAt
+  site                      Site                     @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
   @@index([siteId])
 }
 
 model PreviewToken {
-  id        String   @id @default(uuid()) @db.Uuid
-  siteId    String   @db.Uuid
-  pageKey   String?
-  tokenHash String   @unique
-  expiresAt DateTime
-  revokedAt DateTime?
-  note      String?
-  createdBy String?  @db.Uuid
-  createdAt DateTime @default(now())
-  site      Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  id            String     @id @default(uuid()) @db.Uuid
+  siteId        String     @db.Uuid
+  pageKey       String?
+  tokenHash     String     @unique
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  note          String?
+  createdBy     String?    @db.Uuid
+  createdAt     DateTime   @default(now())
+  site          Site       @relation(fields: [siteId], references: [id], onDelete: Cascade)
   createdByUser AdminUser? @relation(fields: [createdBy], references: [id], onDelete: SetNull)
 
   @@index([siteId, expiresAt])
@@ -199,27 +228,27 @@ model AuditLog {
 }
 
 model Template {
-  id                  String             @id @default(uuid()) @db.Uuid
-  tenantId            String?            @db.Uuid
-  key                 String             @unique
-  sourceType          TemplateSourceType @default(STARTER)
-  baseTemplateKey     String?
-  name                String
-  category            String
-  description         String
-  status              TemplateStatus     @default(ACTIVE)
-  createdBy           String?            @db.Uuid
-  draftName           String?
-  draftCategory       String?
-  draftDescription    String?
+  id                   String             @id @default(uuid()) @db.Uuid
+  tenantId             String?            @db.Uuid
+  key                  String             @unique
+  sourceType           TemplateSourceType @default(STARTER)
+  baseTemplateKey      String?
+  name                 String
+  category             String
+  description          String
+  status               TemplateStatus     @default(ACTIVE)
+  createdBy            String?            @db.Uuid
+  draftName            String?
+  draftCategory        String?
+  draftDescription     String?
   draftPresetOverrides Json?
-  createdAt           DateTime           @default(now())
-  updatedAt           DateTime           @updatedAt
-  tenant              Tenant?            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  createdByUser       AdminUser?         @relation("TemplateCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
-  versions            TemplateVersion[]
-  sites               Site[]
-  sourcePages         Page[] @relation("PageSourceTemplate")
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  tenant               Tenant?            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdByUser        AdminUser?         @relation("TemplateCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  versions             TemplateVersion[]
+  sites                Site[]
+  sourcePages          Page[]             @relation("PageSourceTemplate")
 
   @@index([tenantId])
   @@index([sourceType])
@@ -237,7 +266,7 @@ model TemplateVersion {
   updatedAt       DateTime @updatedAt
   template        Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
   sites           Site[]
-  sourcePages     Page[] @relation("PageSourceTemplateVersion")
+  sourcePages     Page[]   @relation("PageSourceTemplateVersion")
 
   @@unique([templateId, version])
   @@index([templateId])
@@ -245,25 +274,25 @@ model TemplateVersion {
 }
 
 model SiteSettings {
-  id             String   @id @default(uuid()) @db.Uuid
-  siteId         String   @unique @db.Uuid
-  logoUrl        String?
-  faviconUrl     String?
-  tagline        String?
-  contactEmail   String?
-  contactPhone   String?
-  address        String?
-  socialLinks    Json?
-  seoTitle       String?
-  seoDescription String?
-  theme          Json?
+  id                String   @id @default(uuid()) @db.Uuid
+  siteId            String   @unique @db.Uuid
+  logoUrl           String?
+  faviconUrl        String?
+  tagline           String?
+  contactEmail      String?
+  contactPhone      String?
+  address           String?
+  socialLinks       Json?
+  seoTitle          String?
+  seoDescription    String?
+  theme             Json?
   primaryNavigation Json?
-  footerNavigation Json?
-  locale         String?
-  timezone       String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  site           Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  footerNavigation  Json?
+  locale            String?
+  timezone          String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  site              Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
 }
 
 model ContactSubmission {
@@ -285,49 +314,173 @@ model ContactSubmission {
   @@index([siteId, createdAt])
 }
 
+model AiPrefillRun {
+  id             String                    @id @default(uuid()) @db.Uuid
+  adminId        String                    @db.Uuid
+  tenantId       String                    @db.Uuid
+  siteId         String                    @db.Uuid
+  pageId         String?                   @db.Uuid
+  pageKey        String
+  status         AiPrefillRunStatus        @default(UPLOADED)
+  model          String?
+  tokenEstimate  Int?
+  analysis       Json?
+  pageSuggestion Json?
+  metadata       Json?
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+  expiresAt      DateTime?
+  generatedAt    DateTime?
+  appliedAt      DateTime?
+  rejectedAt     DateTime?
+  admin          AdminUser                 @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  tenant         Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  site           Site                      @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  page           Page?                     @relation(fields: [pageId], references: [id], onDelete: SetNull)
+  artifacts      AiPrefillArtifact[]
+  suggestions    AiPrefillSuggestion[]
+  applications   AiSuggestionApplication[]
+
+  @@index([adminId, createdAt])
+  @@index([tenantId, siteId, pageKey, createdAt])
+  @@index([siteId, status, createdAt])
+  @@index([expiresAt])
+}
+
+model AiPrefillArtifact {
+  id               String                  @id @default(uuid()) @db.Uuid
+  runId            String                  @db.Uuid
+  adminId          String                  @db.Uuid
+  tenantId         String                  @db.Uuid
+  siteId           String                  @db.Uuid
+  pageKey          String
+  fileName         String
+  storageKey       String
+  storageProvider  String?
+  bucket           String?
+  visibility       String?
+  checksum         String?
+  mimeType         String
+  kind             String
+  sizeBytes        Int
+  extractedText    String?
+  extractedSummary String?
+  status           AiPrefillArtifactStatus @default(ACTIVE)
+  createdAt        DateTime                @default(now())
+  expiresAt        DateTime
+  retainedUntil    DateTime?
+  deletedAt        DateTime?
+  run              AiPrefillRun            @relation(fields: [runId], references: [id], onDelete: Cascade)
+  admin            AdminUser               @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  tenant           Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  site             Site                    @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+  @@index([tenantId, siteId, pageKey, createdAt])
+  @@index([expiresAt, status])
+}
+
+model AiPrefillSuggestion {
+  id           String                    @id @default(uuid()) @db.Uuid
+  runId        String                    @db.Uuid
+  pageId       String?                   @db.Uuid
+  blockId      String?
+  blockType    String?
+  label        String
+  summary      String
+  dataPatch    Json
+  pagePatch    Json?
+  confidence   Float?
+  notes        String?
+  status       AiPrefillSuggestionStatus @default(PENDING)
+  createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @updatedAt
+  appliedAt    DateTime?
+  rejectedAt   DateTime?
+  run          AiPrefillRun              @relation(fields: [runId], references: [id], onDelete: Cascade)
+  page         Page?                     @relation(fields: [pageId], references: [id], onDelete: SetNull)
+  applications AiSuggestionApplication[]
+
+  @@index([runId, status])
+  @@index([pageId, status])
+}
+
+model AiSuggestionApplication {
+  id                    String               @id @default(uuid()) @db.Uuid
+  runId                 String               @db.Uuid
+  suggestionId          String?              @db.Uuid
+  adminId               String               @db.Uuid
+  siteId                String               @db.Uuid
+  pageId                String?              @db.Uuid
+  pageKey               String
+  action                String
+  selectedMetadata      Json?
+  selectedSuggestionIds Json?
+  appliedPatch          Json?
+  createdAt             DateTime             @default(now())
+  run                   AiPrefillRun         @relation(fields: [runId], references: [id], onDelete: Cascade)
+  suggestion            AiPrefillSuggestion? @relation(fields: [suggestionId], references: [id], onDelete: SetNull)
+  admin                 AdminUser            @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  site                  Site                 @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  page                  Page?                @relation(fields: [pageId], references: [id], onDelete: SetNull)
+
+  @@index([runId, createdAt])
+  @@index([adminId, createdAt])
+  @@index([siteId, pageKey, createdAt])
+}
+
 model Asset {
-  id        String   @id @default(uuid()) @db.Uuid
-  siteId    String   @db.Uuid
-  url       String
-  filename  String
-  mimeType  String
-  size      Int
-  altText   String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  site      Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  id              String   @id @default(uuid()) @db.Uuid
+  siteId          String   @db.Uuid
+  url             String
+  storageProvider String?
+  storageKey      String?
+  bucket          String?
+  publicUrl       String?
+  visibility      String?
+  checksum        String?
+  filename        String
+  mimeType        String
+  size            Int
+  altText         String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  site            Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
   @@index([siteId, createdAt])
 }
 
 model Page {
-  id                       String        @id @default(uuid()) @db.Uuid
-  siteId                   String        @db.Uuid
-  pageKey                  String
-  pageTemplateKey          String?
-  sourceTemplateId         String?       @db.Uuid
-  sourceTemplateVersionId  String?       @db.Uuid
-  sourcePageBlueprintKey   String?
-  lineageStatus            PageTemplateLineageStatus @default(UNTRACKED)
-  hierarchyRole            PageHierarchyRole @default(MAIN)
-  defaultParentPageKey     String?
-  allowedBlockTypes        Json?
-  isVisible                Boolean       @default(true)
-  slug                     String
-  title                    String
-  status                   PageStatus    @default(DRAFT)
-  seoTitle                 String?
-  seoDescription           String?
-  currentDraftRevisionId   String?       @db.Uuid
-  currentPublishedRevisionId String?     @db.Uuid
-  createdAt                DateTime      @default(now())
-  updatedAt                DateTime      @updatedAt
-  site                     Site          @relation(fields: [siteId], references: [id], onDelete: Cascade)
-  sourceTemplate           Template?     @relation("PageSourceTemplate", fields: [sourceTemplateId], references: [id], onDelete: SetNull)
-  sourceTemplateVersion    TemplateVersion? @relation("PageSourceTemplateVersion", fields: [sourceTemplateVersionId], references: [id], onDelete: SetNull)
-  revisions                PageRevision[] @relation("PageRevisions")
-  currentDraftRevision     PageRevision? @relation("CurrentDraftRevision", fields: [currentDraftRevisionId], references: [id], onDelete: SetNull)
-  currentPublishedRevision PageRevision? @relation("CurrentPublishedRevision", fields: [currentPublishedRevisionId], references: [id], onDelete: SetNull)
+  id                         String                    @id @default(uuid()) @db.Uuid
+  siteId                     String                    @db.Uuid
+  pageKey                    String
+  pageTemplateKey            String?
+  sourceTemplateId           String?                   @db.Uuid
+  sourceTemplateVersionId    String?                   @db.Uuid
+  sourcePageBlueprintKey     String?
+  lineageStatus              PageTemplateLineageStatus @default(UNTRACKED)
+  hierarchyRole              PageHierarchyRole         @default(MAIN)
+  defaultParentPageKey       String?
+  allowedBlockTypes          Json?
+  isVisible                  Boolean                   @default(true)
+  slug                       String
+  title                      String
+  status                     PageStatus                @default(DRAFT)
+  seoTitle                   String?
+  seoDescription             String?
+  currentDraftRevisionId     String?                   @db.Uuid
+  currentPublishedRevisionId String?                   @db.Uuid
+  createdAt                  DateTime                  @default(now())
+  updatedAt                  DateTime                  @updatedAt
+  site                       Site                      @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  sourceTemplate             Template?                 @relation("PageSourceTemplate", fields: [sourceTemplateId], references: [id], onDelete: SetNull)
+  sourceTemplateVersion      TemplateVersion?          @relation("PageSourceTemplateVersion", fields: [sourceTemplateVersionId], references: [id], onDelete: SetNull)
+  revisions                  PageRevision[]            @relation("PageRevisions")
+  currentDraftRevision       PageRevision?             @relation("CurrentDraftRevision", fields: [currentDraftRevisionId], references: [id], onDelete: SetNull)
+  currentPublishedRevision   PageRevision?             @relation("CurrentPublishedRevision", fields: [currentPublishedRevisionId], references: [id], onDelete: SetNull)
+  aiPrefillRuns              AiPrefillRun[]
+  aiPrefillSuggestions       AiPrefillSuggestion[]
+  aiSuggestionApplications   AiSuggestionApplication[]
 
   @@unique([siteId, pageKey])
   @@unique([siteId, slug])
@@ -337,22 +490,22 @@ model Page {
 }
 
 model PageRevision {
-  id                String            @id @default(uuid()) @db.Uuid
-  pageId            String            @db.Uuid
-  revisionNumber    Int
-  state             PageRevisionState
-  content           Json
-  schemaVersion     Int               @default(1)
-  checksum          String?
-  createdBy         String?           @db.Uuid
-  publishedBy       String?           @db.Uuid
-  createdAt         DateTime          @default(now())
-  publishedAt       DateTime?
-  page              Page              @relation("PageRevisions", fields: [pageId], references: [id], onDelete: Cascade)
-  createdByUser     AdminUser?        @relation("PageRevisionCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
-  publishedByUser   AdminUser?        @relation("PageRevisionPublishedBy", fields: [publishedBy], references: [id], onDelete: SetNull)
-  currentDraftFor   Page[]            @relation("CurrentDraftRevision")
-  currentPublishedFor Page[]          @relation("CurrentPublishedRevision")
+  id                  String            @id @default(uuid()) @db.Uuid
+  pageId              String            @db.Uuid
+  revisionNumber      Int
+  state               PageRevisionState
+  content             Json
+  schemaVersion       Int               @default(1)
+  checksum            String?
+  createdBy           String?           @db.Uuid
+  publishedBy         String?           @db.Uuid
+  createdAt           DateTime          @default(now())
+  publishedAt         DateTime?
+  page                Page              @relation("PageRevisions", fields: [pageId], references: [id], onDelete: Cascade)
+  createdByUser       AdminUser?        @relation("PageRevisionCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  publishedByUser     AdminUser?        @relation("PageRevisionPublishedBy", fields: [publishedBy], references: [id], onDelete: SetNull)
+  currentDraftFor     Page[]            @relation("CurrentDraftRevision")
+  currentPublishedFor Page[]            @relation("CurrentPublishedRevision")
 
   @@unique([pageId, revisionNumber])
   @@index([pageId, revisionNumber])
@@ -406,25 +559,25 @@ model WorkTag {
 }
 
 model WorkProject {
-  id                 String           @id @default(uuid()) @db.Uuid
-  siteId             String           @db.Uuid
-  templateId         String
-  titleDraft         String
-  slugDraft          String
-  excerptDraft       String
-  coverImageDraft    String
-  draftContent       Json             @default(dbgenerated("'{}'::jsonb"))
-  titlePublished     String?
-  slugPublished      String?
-  excerptPublished   String?
+  id                  String           @id @default(uuid()) @db.Uuid
+  siteId              String           @db.Uuid
+  templateId          String
+  titleDraft          String
+  slugDraft           String
+  excerptDraft        String
+  coverImageDraft     String
+  draftContent        Json             @default(dbgenerated("'{}'::jsonb"))
+  titlePublished      String?
+  slugPublished       String?
+  excerptPublished    String?
   coverImagePublished String?
-  publishedContent   Json             @default(dbgenerated("'{}'::jsonb"))
-  status             CmsStatus        @default(DRAFT)
-  publishedAt        DateTime?
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
-  site               Site             @relation(fields: [siteId], references: [id], onDelete: Cascade)
-  tags               WorkProjectTag[]
+  publishedContent    Json             @default(dbgenerated("'{}'::jsonb"))
+  status              CmsStatus        @default(DRAFT)
+  publishedAt         DateTime?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  site                Site             @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  tags                WorkProjectTag[]
 
   @@unique([siteId, slugDraft])
   @@unique([siteId, slugPublished])

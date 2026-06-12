@@ -1,5 +1,4 @@
 import crypto from "crypto";
-import path from "path";
 import { Router } from "express";
 import multer from "multer";
 
@@ -8,23 +7,12 @@ import { requireAdmin } from "../middleware/requireAdmin";
 import { requireRole } from "../middleware/requireRole";
 import { withAdminSiteContext } from "../middleware/withAdminSiteContext";
 import { createAdminAsset } from "../services/assetsAdmin";
-import { getUploadsDir } from "../services/uploadStorage";
+import { putObject } from "../services/storage";
 
 const router = Router();
 
-const uploadDir = getUploadsDir();
-
-const storage = multer.diskStorage({
-  destination: uploadDir,
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    const name = `${Date.now()}-${crypto.randomBytes(6).toString("hex")}${ext}`;
-    cb(null, name);
-  },
-});
-
 export const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 50 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const isImage = file.mimetype.startsWith("image/");
@@ -46,18 +34,35 @@ router.post("/", requireAdmin, withAdminSiteContext, requireRole(["OWNER", "ADMI
   }
 
   const siteId = req.context?.siteId;
-  if (!siteId) {
+  const tenantId = req.context?.tenantId;
+  if (!siteId || !tenantId) {
     return res.status(500).json({
       ok: false,
       error: { message: "Missing admin site context." },
     });
   }
 
-  const baseUrl = `${req.protocol}://${req.get("host")}`;
-  const url = `${baseUrl}/uploads/${req.file.filename}`;
+  const stored = await putObject({
+    visibility: "public",
+    tenantId,
+    siteId,
+    category: "asset",
+    ownerId: crypto.randomUUID(),
+    filename: req.file.originalname,
+    body: req.file.buffer,
+    mimeType: req.file.mimetype,
+    sizeBytes: req.file.size,
+  });
+  const url = stored.publicUrl ?? `/uploads/${stored.key}`;
   const asset = await createAdminAsset(prisma, {
     siteId,
     url,
+    storageProvider: stored.provider,
+    storageKey: stored.key,
+    bucket: stored.bucket,
+    publicUrl: stored.publicUrl,
+    visibility: stored.visibility,
+    checksum: stored.checksum,
     filename: req.file.originalname,
     mimeType: req.file.mimetype,
     size: req.file.size,
