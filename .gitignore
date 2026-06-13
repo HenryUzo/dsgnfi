@@ -6,6 +6,8 @@ app/.env.local
 
 # deps
 node_modules/
+server/node_modules/
+app/node_modules/
 
 # builds
 dist/
@@ -28,6 +30,9 @@ Thumbs.db
 server/uploads/
 .local-postgres/
 .local-postgres/*.log
+server/tmp-*
+tmp-cookies.txt
+tmp-*.txt
 
 # Local Netlify folder
 .netlify
