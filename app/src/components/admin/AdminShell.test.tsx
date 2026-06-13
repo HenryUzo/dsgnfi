@@ -249,6 +249,26 @@ describe("AdminShell", () => {
     expect(screen.getAllByText("Home Page").length).toBeGreaterThan(0);
   });
 
+  it("renders the legacy homepage breadcrumb on the canonical route", () => {
+    render(
+      <MemoryRouter initialEntries={["/admin/legacy/home"]}>
+        <Routes>
+          <Route
+            path="/admin/legacy/home"
+            element={
+              <AdminShell title="Legacy Homepage Editor">
+                <div>Legacy home editor</div>
+              </AdminShell>
+            }
+          />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(screen.getAllByText("Legacy Homepage Editor").length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: "Pages" }).length).toBeGreaterThan(0);
+  });
+
   it("opens the AI admin guide and sends route-aware context", async () => {
     render(
       <MemoryRouter initialEntries={["/admin/pages/home"]}>

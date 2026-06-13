@@ -15,6 +15,7 @@ import {
   type AdminSection,
 } from "../../lib/cmsAdmin";
 import { listWorkProjects, type WorkProject } from "../../services/workAdmin";
+import { listAdminPages, type AdminPageSummary } from "../../services/siteSettings";
 import { SectionCard } from "./components/SectionCard";
 
 const hrefSchema = z
@@ -285,6 +286,7 @@ function VisibilityToggle({
 export function AdminHomeEditor() {
   const navigate = useNavigate();
   const { admin } = useAdmin();
+  const [homePageSummary, setHomePageSummary] = useState<AdminPageSummary | null>(null);
 
   const [hero, setHero] = useState<SectionState<HeroData>>({
     data: defaultHero,
@@ -394,6 +396,28 @@ export function AdminHomeEditor() {
     }
     return false;
   };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadHomePageSummary() {
+      try {
+        const pages = await listAdminPages();
+        if (!cancelled) {
+          setHomePageSummary(pages.find((page) => page.pageKey === "home") ?? null);
+        }
+      } catch (err) {
+        if (!cancelled && !handleAuthError(err)) {
+          setHomePageSummary(null);
+        }
+      }
+    }
+
+    void loadHomePageSummary();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const loadHero = async () => {
     setHero((prev) => ({ ...prev, loading: true, error: null }));
@@ -728,6 +752,26 @@ export function AdminHomeEditor() {
 
   return (
     <div className="flex w-full flex-col gap-6 px-6 py-8">
+        <section className="rounded-3xl border border-amber-300/25 bg-amber-300/10 p-5 text-sm text-amber-50">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="max-w-3xl">
+              <p className="text-[11px] uppercase tracking-[0.28em] text-amber-100/70">Legacy compatibility</p>
+              <p className="mt-3 font-semibold">This is the older section-based homepage editor.</p>
+              <p className="mt-2 text-amber-50/75">
+                It remains available for compatibility with legacy `CmsSection` homepage content. It does not replace the block-based Page Editor.
+              </p>
+            </div>
+            {homePageSummary?.editorResolution.hasModernPage ? (
+              <button
+                type="button"
+                onClick={() => navigate("/admin/pages/home")}
+                className="inline-flex rounded-full border border-amber-200/30 px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-amber-50 hover:border-amber-100"
+              >
+                Open block editor
+              </button>
+            ) : null}
+          </div>
+        </section>
         <section className="rounded-3xl border border-white/10 bg-white/5 p-5 text-sm text-white/70">
           <p className="text-[11px] uppercase tracking-[0.28em] text-white/45">Home Editor</p>
           <p className="mt-3">

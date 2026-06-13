@@ -56,6 +56,47 @@ const MAX_PREFILL_FILES = 3;
 const MAX_PREFILL_FILE_BYTES = 8 * 1024 * 1024;
 const PREFILL_ACCEPT = ".pdf,.doc,.docx,.txt,.md,image/png,image/jpeg,image/webp";
 
+function PageEditorCompatibilityBanner({
+  page,
+}: {
+  page: AdminPageDetail;
+}) {
+  const resolution = page.editorResolution;
+  if (resolution.contentMode !== "MIXED" && resolution.contentMode !== "LEGACY_ONLY") {
+    return null;
+  }
+
+  const title =
+    resolution.contentMode === "MIXED"
+      ? "Legacy homepage sections still exist."
+      : "Legacy homepage content is still the active compatibility source.";
+  const body =
+    resolution.contentMode === "MIXED"
+      ? "This page has both block-based and legacy section content. The block editor remains the default. Legacy content is still available for compatibility."
+      : "This homepage still has older section-based content. Use the legacy editor for that content source. The block editor remains available for modern drafts and review.";
+
+  return (
+    <div className="mx-5 mt-5 rounded-3xl border border-amber-300/25 bg-amber-300/10 p-4 text-sm text-amber-50">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="max-w-3xl">
+          <p className="font-semibold">{title}</p>
+          <p className="mt-1 text-amber-50/75">{body}</p>
+        </div>
+        {resolution.legacyEditorRoute ? (
+          <div className="flex flex-wrap justify-end gap-2">
+            <Link
+              to={resolution.legacyEditorRoute}
+              className="inline-flex rounded-full border border-amber-200/30 px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-amber-50 hover:border-amber-100"
+            >
+              Open legacy editor
+            </Link>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 function readFileAsDataUrl(file: File) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -3683,7 +3724,7 @@ export function PageEditor() {
             This site may still rely on the deprecated section-based homepage editor. Legacy content remains available for compatibility.
           </p>
           <Link
-            to="/admin/pages/home/legacy"
+            to="/admin/legacy/home"
             className="mt-4 inline-flex rounded-full border border-amber-200/30 px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-amber-50 hover:border-amber-100"
           >
             Open legacy editor
@@ -3765,6 +3806,7 @@ export function PageEditor() {
 
   return (
     <div className="min-h-screen bg-[#05070a] text-white">
+      <PageEditorCompatibilityBanner page={page} />
       <PageEditorTopBar
         page={page}
         saving={saving}
@@ -3942,6 +3984,7 @@ export function PageEditor() {
           onApply={() => void applyPrefillSuggestions()}
         />
       ) : null}
+
     </div>
   );
 }

@@ -95,11 +95,19 @@ function resolveAdminBreadcrumbs(pathname: string, title: string): AdminBreadcru
       ],
     },
     {
+      pattern: "/admin/legacy/home",
+      build: () => [
+        { label: "Dashboard", to: "/admin" },
+        { label: "Pages", to: "/admin/pages" },
+        { label: "Legacy Homepage Editor" },
+      ],
+    },
+    {
       pattern: "/admin/pages/home/legacy",
       build: () => [
         { label: "Dashboard", to: "/admin" },
         { label: "Pages", to: "/admin/pages" },
-        { label: "Legacy Home Editor" },
+        { label: "Legacy Homepage Editor" },
       ],
     },
     {

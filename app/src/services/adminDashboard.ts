@@ -129,12 +129,13 @@ function getExpiredPreviewTokens(tokens: PreviewTokenSummary[]) {
   });
 }
 
-function getPageRoute(pageKey: unknown) {
+function getPageRouteFromSummaries(pageKey: unknown, pages: AdminPageSummary[]) {
   if (typeof pageKey !== "string" || pageKey.length === 0) {
     return "/admin/pages";
   }
 
-  return `/admin/pages/${encodeURIComponent(pageKey)}`;
+  const matchedPage = pages.find((page) => page.pageKey === pageKey);
+  return matchedPage?.editorResolution.editorRoute ?? `/admin/pages/${encodeURIComponent(pageKey)}`;
 }
 
 function getActorLabel(entry: AdminAuditEntry) {
@@ -406,7 +407,10 @@ function buildIssues(
   return issues;
 }
 
-function buildActivitySummary(entry: AdminAuditEntry): DashboardActivity | null {
+function buildActivitySummary(
+  entry: AdminAuditEntry,
+  pages: AdminPageSummary[]
+): DashboardActivity | null {
   const metadata = entry.metadata ?? {};
   const hostname = typeof metadata.hostname === "string" ? metadata.hostname : null;
   const pageKey = typeof metadata.pageKey === "string" ? metadata.pageKey : null;
@@ -435,7 +439,7 @@ function buildActivitySummary(entry: AdminAuditEntry): DashboardActivity | null 
         timestamp: entry.createdAt,
         actor: getActorLabel(entry),
         summary: pageKey ? `${pageKey} page created` : "Page created",
-        to: getPageRoute(pageKey),
+        to: getPageRouteFromSummaries(pageKey, pages),
       };
     case "page.published":
       return {
@@ -443,7 +447,7 @@ function buildActivitySummary(entry: AdminAuditEntry): DashboardActivity | null 
         timestamp: entry.createdAt,
         actor: getActorLabel(entry),
         summary: pageKey ? `${pageKey} published` : "Page published",
-        to: getPageRoute(pageKey),
+        to: getPageRouteFromSummaries(pageKey, pages),
       };
     case "domain.created":
       return {
@@ -499,10 +503,11 @@ function buildActivitySummary(entry: AdminAuditEntry): DashboardActivity | null 
 
 function buildRecentActivity(
   site: AdminSiteDetail,
-  entries: AdminAuditEntry[]
+  entries: AdminAuditEntry[],
+  pages: AdminPageSummary[]
 ): DashboardActivity[] {
   const mapped = entries
-    .map(buildActivitySummary)
+    .map((entry) => buildActivitySummary(entry, pages))
     .filter((entry): entry is DashboardActivity => Boolean(entry))
     .slice(0, 6);
 
@@ -608,7 +613,7 @@ export async function getAdminDashboardSummary(currentSiteId: string) {
     },
     recommendedAction,
     issues,
-    recentActivity: buildRecentActivity(currentSite, auditEntries),
+    recentActivity: buildRecentActivity(currentSite, auditEntries, pages),
     recentSites: buildRecentSites(sites, currentSite.id),
     templateShortcut: currentSite.template
       ? {

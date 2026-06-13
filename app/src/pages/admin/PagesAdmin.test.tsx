@@ -30,6 +30,25 @@ vi.mock("../../services/siteSettings", () => ({
   deleteAdminPage: vi.fn(),
 }));
 
+function makeEditorResolution(
+  overrides: Partial<Awaited<ReturnType<typeof listAdminPages>>[number]["editorResolution"]> = {}
+) {
+  return {
+    hasModernPage: true,
+    hasModernDraft: true,
+    hasModernPublishedRevision: true,
+    hasLegacyCmsContent: false,
+    hasPublishedLegacyContent: false,
+    preferredEditor: "BLOCK" as const,
+    editorRoute: "/admin/pages/home",
+    legacyEditorRoute: null,
+    contentMode: "MODERN_ONLY" as const,
+    compatibilityReason: "MODERN_PAGE_AVAILABLE" as const,
+    migrationAvailable: false,
+    ...overrides,
+  };
+}
+
 function makeSummary(overrides: Partial<Awaited<ReturnType<typeof listAdminPages>>[number]>) {
   return {
     id: "page-home",
@@ -43,6 +62,8 @@ function makeSummary(overrides: Partial<Awaited<ReturnType<typeof listAdminPages
     seoTitle: "Home",
     seoDescription: "Homepage",
     updatedAt: "2026-05-14T10:00:00.000Z",
+    modernStatus: "PUBLISHED" as const,
+    legacyStatus: "NONE" as const,
     draftRevisionNumber: 2,
     publishedRevisionNumber: 2,
     publishedAt: "2026-05-14T10:00:00.000Z",
@@ -60,6 +81,7 @@ function makeSummary(overrides: Partial<Awaited<ReturnType<typeof listAdminPages
       defaultParentTitle: null,
       defaultParentSlug: null,
     },
+    editorResolution: makeEditorResolution(),
     ...overrides,
   };
 }
@@ -478,5 +500,63 @@ describe("PagesAdmin", () => {
 
     expect(screen.queryByLabelText("Rename Home")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Rename Services")).toBeInTheDocument();
+  });
+
+  it("uses the backend-provided editor route and surfaces mixed or legacy modes", async () => {
+    vi.mocked(listAdminPages).mockResolvedValue([
+      makeSummary({
+        editorResolution: makeEditorResolution({
+          preferredEditor: "LEGACY",
+          editorRoute: "/admin/legacy/home",
+          legacyEditorRoute: "/admin/legacy/home",
+          contentMode: "LEGACY_ONLY",
+          compatibilityReason: "LEGACY_ONLY_CONTENT",
+          migrationAvailable: true,
+          hasLegacyCmsContent: true,
+        }),
+        modernStatus: "DRAFT",
+        legacyStatus: "PUBLISHED",
+      }),
+      makeSummary({
+        id: "page-works",
+        pageKey: "works",
+        title: "Works",
+        slug: "/works",
+        status: "DRAFT",
+        modernStatus: "DRAFT",
+        legacyStatus: "NONE",
+        draftRevisionNumber: 1,
+        publishedRevisionNumber: null,
+        publishedAt: null,
+        editorResolution: makeEditorResolution({
+          editorRoute: "/admin/pages/works",
+          contentMode: "MIXED",
+          compatibilityReason: "MODERN_AND_LEGACY_COEXIST",
+          legacyEditorRoute: "/admin/legacy/home",
+          migrationAvailable: true,
+          hasLegacyCmsContent: true,
+          hasPublishedLegacyContent: true,
+        }),
+      }),
+    ]);
+
+    render(
+      <MemoryRouter>
+        <PagesAdmin />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText("Current site pages")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open legacy editor" })).toHaveAttribute(
+      "href",
+      "/admin/legacy/home"
+    );
+    expect(screen.getByText("Mixed content")).toBeInTheDocument();
+
+    fireEvent.pointerDown(screen.getByLabelText("Page actions for Works"));
+    const menu = await screen.findByRole("menu");
+    expect(
+      within(menu).getByText("Open legacy editor").closest("a")
+    ).toHaveAttribute("href", "/admin/legacy/home");
   });
 });

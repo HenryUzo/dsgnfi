@@ -1,6 +1,7 @@
 ﻿import { useEffect, useState } from 'react';
 import {
   BrowserRouter,
+  Navigate,
   Routes,
   Route,
   useLocation,
@@ -282,7 +283,7 @@ function LegacyHomeEditorRoute() {
   return (
     <div className="space-y-4">
       <div className="rounded-3xl border border-amber-300/25 bg-amber-300/10 p-4 text-sm text-amber-50">
-        <p className="font-semibold">Legacy home editor</p>
+        <p className="font-semibold">Legacy homepage editor</p>
         <p className="mt-1 text-amber-50/75">
           This editor is kept for older section-based homepage content. New CMS pages should be edited from the block-based Page Editor.
         </p>
@@ -355,12 +356,16 @@ function AppRoutes() {
           }
         />
         <Route
-          path="/admin/pages/home/legacy"
+          path="/admin/legacy/home"
           element={
             <AdminRoute title="Legacy Home Editor">
               <LegacyHomeEditorRoute />
             </AdminRoute>
           }
+        />
+        <Route
+          path="/admin/pages/home/legacy"
+          element={<Navigate replace to="/admin/legacy/home" />}
         />
         <Route
           path="/admin/pages/generic/:pageKey"
