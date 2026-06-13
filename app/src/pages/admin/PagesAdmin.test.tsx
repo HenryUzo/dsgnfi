@@ -471,7 +471,7 @@ describe("PagesAdmin", () => {
     );
 
     expect(await screen.findByText("Current site pages")).toBeInTheDocument();
-    expect(screen.getByLabelText("Rename Home")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Rename Home")).toBeInTheDocument();
     expect(screen.getByLabelText("Rename Services")).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("Search pages"), {
