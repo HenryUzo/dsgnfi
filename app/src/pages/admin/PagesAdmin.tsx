@@ -83,6 +83,11 @@ function getPageEditorPath(page: AdminPageSummary) {
   return page.editorResolution?.editorRoute ?? `/admin/pages/${encodeURIComponent(page.pageKey)}`;
 }
 
+function getPageMigrationPreviewPath(page: AdminPageSummary) {
+  const editorPath = getPageEditorPath(page);
+  return `${editorPath}${editorPath.includes("?") ? "&" : "?"}migrationPreview=1`;
+}
+
 function getPublicPagePath(page: AdminPageSummary, siteSlug?: string | null) {
   return buildSiteScopedPath(page.slug, siteSlug);
 }
@@ -1638,6 +1643,14 @@ export function PagesAdmin() {
                                         <Link to={page.editorResolution.legacyEditorRoute}>
                                           <ExternalLink className="h-4 w-4" />
                                           Open legacy editor
+                                        </Link>
+                                      </DropdownMenuItem>
+                                    ) : null}
+                                    {page.editorResolution?.migrationAvailable ? (
+                                      <DropdownMenuItem asChild className="focus:bg-white/10 focus:text-white">
+                                        <Link to={getPageMigrationPreviewPath(page)}>
+                                          <Lightbulb className="h-4 w-4" />
+                                          Preview migration
                                         </Link>
                                       </DropdownMenuItem>
                                     ) : null}

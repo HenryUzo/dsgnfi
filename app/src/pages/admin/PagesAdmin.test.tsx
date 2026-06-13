@@ -558,5 +558,9 @@ describe("PagesAdmin", () => {
     expect(
       within(menu).getByText("Open legacy editor").closest("a")
     ).toHaveAttribute("href", "/admin/legacy/home");
+    expect(within(menu).getByText("Preview migration").closest("a")).toHaveAttribute(
+      "href",
+      "/admin/pages/works?migrationPreview=1"
+    );
   });
 });

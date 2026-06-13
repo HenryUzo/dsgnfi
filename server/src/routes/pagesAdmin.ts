@@ -18,6 +18,12 @@ import {
   recordPrefillRejection,
 } from "../services/adminAiPrefill";
 import { writeAuditLog } from "../services/auditLog";
+import {
+  applyLegacyHomeMigrationPreview,
+  cancelLegacyHomeMigrationPreview,
+  generateLegacyHomeMigrationPreview,
+  isLegacyMigrationSourceChangedError,
+} from "../services/legacyHomeMigration";
 import { pageSlugSchema } from "../services/pageValidation";
 import {
   createAdminPage,
@@ -76,6 +82,25 @@ const prefillApplicationSchema = z.object({
   selectedMetadata: z.array(z.string().trim().min(1).max(80)).max(8).default([]),
   selectedSuggestionIds: z.array(z.string().trim().min(1).max(120)).max(24).default([]),
   appliedPatch: z.record(z.string(), z.unknown()).default({}),
+});
+
+const legacyMigrationApplySchema = z.object({
+  sourceFingerprint: z.string().trim().min(16).max(256),
+  proposedContent: z.object({
+    blocks: z
+      .array(
+        z.object({
+          id: z.string().trim().min(1),
+          type: z.string().trim().min(1),
+          data: z.record(z.string(), z.unknown()),
+        })
+      )
+      .default([]),
+  }),
+});
+
+const legacyMigrationCancelSchema = z.object({
+  sourceFingerprint: z.string().trim().min(16).max(256).optional(),
 });
 
 function getSiteId(req: Request, res: Response) {
@@ -722,6 +747,202 @@ router.delete("/:pageKey/ai/prefill/:runId/brief", requireRole(["OWNER", "ADMIN"
 
   return res.json({ ok: true, suggestions: result.review });
 });
+
+router.post(
+  "/home/legacy-migration/preview",
+  requireRole(["OWNER", "ADMIN", "EDITOR"]),
+  async (req, res) => {
+    const siteId = getSiteId(req, res);
+    const adminId = getAdminId(req, res);
+    const tenantId = req.context?.tenantId;
+    if (!siteId || !adminId || !tenantId) return;
+
+    const result = await generateLegacyHomeMigrationPreview(prisma, {
+      tenantId,
+      siteId,
+    });
+
+    if (result.type === "not_found" || result.type === "page_not_found") {
+      return res.status(404).json({
+        ok: false,
+        error: { code: "legacy_migration_not_found", message: "Homepage migration source was not found." },
+      });
+    }
+
+    if (result.type === "empty_legacy") {
+      return res.status(400).json({
+        ok: false,
+        error: {
+          code: "legacy_migration_empty",
+          message: "There is no legacy homepage content available to migrate.",
+        },
+      });
+    }
+
+    await writeAuditLog(prisma, {
+      actorAdminUserId: adminId,
+      siteId,
+      action: "legacy_home_migration.preview_generated",
+      entityType: "Page",
+      entityId: result.page.id,
+      metadata: {
+        pageKey: "home",
+        sourceFingerprint: result.preview.sourceFingerprint,
+        mappedSections: result.preview.summary.mappedSections,
+        unsupportedSections: result.preview.summary.unsupportedSections,
+        unsupportedFields: result.preview.summary.unsupportedFields,
+      },
+    });
+
+    return res.json({ ok: true, preview: result.preview });
+  }
+);
+
+router.post(
+  "/home/legacy-migration/apply",
+  requireRole(["OWNER", "ADMIN", "EDITOR"]),
+  async (req, res) => {
+    const siteId = getSiteId(req, res);
+    const adminId = getAdminId(req, res);
+    const tenantId = req.context?.tenantId;
+    if (!siteId || !adminId || !tenantId) return;
+
+    const parsedBody = legacyMigrationApplySchema.safeParse(req.body ?? {});
+    if (!parsedBody.success) {
+      return res.status(400).json({
+        ok: false,
+        error: {
+          code: "validation_failed",
+          message: getValidationMessage(parsedBody.error),
+        },
+      });
+    }
+
+    try {
+      const result = await applyLegacyHomeMigrationPreview(prisma, {
+        tenantId,
+        siteId,
+        adminId,
+        sourceFingerprint: parsedBody.data.sourceFingerprint,
+        proposedContent: parsedBody.data.proposedContent,
+      });
+
+      if (result.type === "not_found" || result.type === "page_not_found") {
+        return res.status(404).json({
+          ok: false,
+          error: { code: "legacy_migration_not_found", message: "Homepage migration target was not found." },
+        });
+      }
+
+      if (result.type === "empty_legacy") {
+        return res.status(400).json({
+          ok: false,
+          error: {
+            code: "legacy_migration_empty",
+            message: "There is no legacy homepage content available to migrate.",
+          },
+        });
+      }
+
+      if (result.type === "validation_error") {
+        return res.status(400).json({
+          ok: false,
+          error: {
+            code: "legacy_migration_invalid_preview",
+            message: result.unsupportedItems[0]?.description ?? "The proposed migration preview is not valid.",
+          },
+        });
+      }
+
+      await writeAuditLog(prisma, {
+        actorAdminUserId: adminId,
+        siteId,
+        action: "legacy_home_migration.applied",
+        entityType: "Page",
+        entityId: result.page.id,
+        metadata: {
+          pageKey: "home",
+          sourceFingerprint: parsedBody.data.sourceFingerprint,
+          draftRevisionNumber: result.page.draftRevisionNumber,
+        },
+      });
+
+      return res.json({ ok: true, page: result.page });
+    } catch (error) {
+      if (isLegacyMigrationSourceChangedError(error)) {
+        await writeAuditLog(prisma, {
+          actorAdminUserId: adminId,
+          siteId,
+          action: "legacy_home_migration.rejected_stale_source",
+          entityType: "Page",
+          entityId: "home",
+          metadata: {
+            pageKey: "home",
+            sourceFingerprint: parsedBody.data.sourceFingerprint,
+          },
+        });
+
+        return res.status(409).json({
+          ok: false,
+          error: {
+            code: "LEGACY_MIGRATION_SOURCE_CHANGED",
+            message: "Legacy homepage content changed after the preview was generated. Regenerate the preview and try again.",
+          },
+        });
+      }
+
+      throw error;
+    }
+  }
+);
+
+router.post(
+  "/home/legacy-migration/cancel",
+  requireRole(["OWNER", "ADMIN", "EDITOR"]),
+  async (req, res) => {
+    const siteId = getSiteId(req, res);
+    const adminId = getAdminId(req, res);
+    const tenantId = req.context?.tenantId;
+    if (!siteId || !adminId || !tenantId) return;
+
+    const parsedBody = legacyMigrationCancelSchema.safeParse(req.body ?? {});
+    if (!parsedBody.success) {
+      return res.status(400).json({
+        ok: false,
+        error: {
+          code: "validation_failed",
+          message: getValidationMessage(parsedBody.error),
+        },
+      });
+    }
+
+    const result = await cancelLegacyHomeMigrationPreview(prisma, {
+      tenantId,
+      siteId,
+    });
+
+    if (result.type === "not_found") {
+      return res.status(404).json({
+        ok: false,
+        error: { code: "legacy_migration_not_found", message: "Homepage migration source was not found." },
+      });
+    }
+
+    await writeAuditLog(prisma, {
+      actorAdminUserId: adminId,
+      siteId,
+      action: "legacy_home_migration.cancelled",
+      entityType: "Page",
+      entityId: "home",
+      metadata: {
+        pageKey: "home",
+        sourceFingerprint: parsedBody.data.sourceFingerprint ?? null,
+      },
+    });
+
+    return res.json({ ok: true });
+  }
+);
 
 router.get("/:pageKey/history", async (req, res) => {
   const siteId = getSiteId(req, res);

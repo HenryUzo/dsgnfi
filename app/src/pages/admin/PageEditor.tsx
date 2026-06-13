@@ -1,11 +1,17 @@
 import { type ChangeEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 
 import { useAdmin } from "../../auth/useAdmin";
 import { useAdminAiPageContext } from "../../components/admin/AdminAiContext";
 import { PageBlocksRenderer } from "../../components/pages/PageBlocksRenderer";
 import { ApiError } from "../../lib/api";
+import {
+  applyLegacyHomeMigration,
+  cancelLegacyHomeMigration,
+  previewLegacyHomeMigration,
+  type LegacyHomeMigrationPreview,
+} from "../../services/legacyHomeMigration";
 import {
   deletePagePrefillBrief,
   getLatestPagePrefillReview,
@@ -58,8 +64,12 @@ const PREFILL_ACCEPT = ".pdf,.doc,.docx,.txt,.md,image/png,image/jpeg,image/webp
 
 function PageEditorCompatibilityBanner({
   page,
+  previewingMigration,
+  onPreviewMigration,
 }: {
   page: AdminPageDetail;
+  previewingMigration: boolean;
+  onPreviewMigration: () => void;
 }) {
   const resolution = page.editorResolution;
   if (resolution.contentMode !== "MIXED" && resolution.contentMode !== "LEGACY_ONLY") {
@@ -84,6 +94,16 @@ function PageEditorCompatibilityBanner({
         </div>
         {resolution.legacyEditorRoute ? (
           <div className="flex flex-wrap justify-end gap-2">
+            {resolution.migrationAvailable ? (
+              <button
+                type="button"
+                onClick={onPreviewMigration}
+                disabled={previewingMigration}
+                className="inline-flex rounded-full bg-amber-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-[#111] hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {previewingMigration ? "Generating preview..." : "Preview migration"}
+              </button>
+            ) : null}
             <Link
               to={resolution.legacyEditorRoute}
               className="inline-flex rounded-full border border-amber-200/30 px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-amber-50 hover:border-amber-100"
@@ -3270,9 +3290,179 @@ function PrefillReviewDialog({
   );
 }
 
+function LegacyMigrationPreviewDialog({
+  preview,
+  applying,
+  onClose,
+  onApply,
+}: {
+  preview: LegacyHomeMigrationPreview;
+  applying: boolean;
+  onClose: () => void;
+  onApply: () => void;
+}) {
+  const mappingStatuses = preview.supportedMappings.map((mapping) => ({
+    mapping,
+    tone:
+      mapping.warnings.length > 0
+        ? "border-amber-300/20 bg-amber-300/10"
+        : "border-emerald-300/20 bg-emerald-300/10",
+    label: mapping.warnings.length > 0 ? "Partial" : "Ready",
+  }));
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-6">
+      <div className="max-h-[90vh] w-full max-w-6xl overflow-y-auto rounded-3xl border border-white/10 bg-[#080a0d] p-6 shadow-2xl">
+        <p className="text-xs uppercase tracking-[0.24em] text-amber-200">Legacy home migration</p>
+        <h2 className="mt-3 text-2xl font-semibold text-white">Preview block-editor draft</h2>
+        <p className="mt-3 max-w-3xl text-sm leading-relaxed text-white/60">
+          Legacy homepage sections remain intact. This preview only proposes a modern draft for review. Nothing is saved or published until you confirm.
+        </p>
+
+        <div className="mt-6 grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
+          <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+            <h3 className="text-sm font-semibold text-white">Migration summary</h3>
+            <div className="mt-4 grid gap-3 text-sm text-white/70">
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                <p className="text-xs uppercase tracking-[0.18em] text-white/40">Legacy sections</p>
+                <p className="mt-2 text-2xl font-semibold text-white">{preview.source.legacySectionCount}</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                <p className="text-xs uppercase tracking-[0.18em] text-white/40">Mapped sections</p>
+                <p className="mt-2 text-2xl font-semibold text-white">{preview.summary.mappedSections}</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                <p className="text-xs uppercase tracking-[0.18em] text-white/40">Unsupported sections</p>
+                <p className="mt-2 text-2xl font-semibold text-white">{preview.summary.unsupportedSections}</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                <p className="text-xs uppercase tracking-[0.18em] text-white/40">Source fingerprint</p>
+                <p className="mt-2 break-all font-mono text-xs text-white/55">{preview.sourceFingerprint}</p>
+              </div>
+            </div>
+          </section>
+
+          <section className="space-y-4">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+              <h3 className="text-sm font-semibold text-white">Supported mappings</h3>
+              <div className="mt-4 space-y-3">
+                {mappingStatuses.length > 0 ? (
+                  mappingStatuses.map(({ mapping, tone, label }) => (
+                    <div key={`${mapping.sourceSectionKey}-${mapping.targetBlockId}`} className={`rounded-2xl border p-4 ${tone}`}>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-full border border-white/10 px-2 py-0.5 text-xs text-white/70">
+                          {mapping.sourceSectionKey}
+                        </span>
+                        <span className="text-xs text-white/35">to</span>
+                        <span className="rounded-full border border-white/10 px-2 py-0.5 text-xs text-white/70">
+                          {mapping.targetBlockType}
+                        </span>
+                        <span className="rounded-full border border-white/10 px-2 py-0.5 text-xs text-white/55">
+                          {label}
+                        </span>
+                      </div>
+                      <p className="mt-3 text-xs uppercase tracking-[0.18em] text-white/35">Mapped fields</p>
+                      <p className="mt-2 text-sm text-white/75">{mapping.sourceFieldKeys.join(", ")}</p>
+                      {mapping.warnings.length > 0 ? (
+                        <div className="mt-3 space-y-2">
+                          {mapping.warnings.map((warning) => (
+                            <p key={warning} className="text-sm text-amber-100/85">
+                              {warning}
+                            </p>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/55">
+                    No supported mappings were found for the current homepage template.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+              <h3 className="text-sm font-semibold text-white">Unsupported or lossy fields</h3>
+              <div className="mt-4 space-y-3">
+                {preview.unsupportedItems.length > 0 ? (
+                  preview.unsupportedItems.map((item, index) => (
+                    <div key={`${item.sourceSectionKey}-${item.fieldKey ?? "section"}-${index}`} className="rounded-2xl border border-rose-300/15 bg-rose-500/10 p-4 text-sm text-rose-100/90">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-full border border-rose-200/20 px-2 py-0.5 text-xs uppercase tracking-[0.16em] text-rose-100/70">
+                          {item.sourceSectionKey}
+                        </span>
+                        <span className="rounded-full border border-rose-200/20 px-2 py-0.5 text-xs text-rose-100/60">
+                          {item.reason}
+                        </span>
+                        {item.fieldKey ? (
+                          <span className="rounded-full border border-rose-200/20 px-2 py-0.5 font-mono text-xs text-rose-100/60">
+                            {item.fieldKey}
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="mt-2 leading-6">{item.description}</p>
+                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-2xl border border-emerald-300/15 bg-emerald-400/10 p-4 text-sm text-emerald-50">
+                    No unsupported fields were detected in this preview.
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <section className="mt-6 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold text-white">Proposed page preview</h3>
+              <p className="mt-1 text-sm text-white/55">
+                This uses the normal page renderer with the proposed block JSON. It is not a published route.
+              </p>
+            </div>
+            {preview.summary.hasBlockingIssues ? (
+              <span className="rounded-full border border-rose-300/20 px-3 py-1 text-xs uppercase tracking-[0.18em] text-rose-100">
+                Blocking issues
+              </span>
+            ) : (
+              <span className="rounded-full border border-emerald-300/20 px-3 py-1 text-xs uppercase tracking-[0.18em] text-emerald-50">
+                Ready to create draft
+              </span>
+            )}
+          </div>
+          <div className="mt-4 overflow-hidden rounded-3xl border border-white/10">
+            <PageBlocksRenderer blocks={preview.proposedContent.blocks} />
+          </div>
+        </section>
+
+        <div className="mt-6 flex flex-wrap justify-end gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-2xl border border-white/15 px-4 py-2.5 text-sm text-white/75 hover:border-white/35 hover:text-white"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onApply}
+            disabled={preview.summary.hasBlockingIssues || applying}
+            className="rounded-2xl bg-white px-5 py-2.5 text-sm font-semibold text-black disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {applying ? "Creating draft..." : "Create block-editor draft"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function PageEditor() {
   const prefillInputRef = useRef<HTMLInputElement | null>(null);
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { admin } = useAdmin();
   const { pageKey } = useParams<{ pageKey: string }>();
   const [page, setPage] = useState<AdminPageDetail | null>(null);
@@ -3297,6 +3487,9 @@ export function PageEditor() {
   const [prefillSuggestions, setPrefillSuggestions] = useState<AdminPagePrefillSuggestion | null>(null);
   const [selectedPrefillMetadata, setSelectedPrefillMetadata] = useState<PrefillMetadataKey[]>([]);
   const [selectedPrefillSuggestionKeys, setSelectedPrefillSuggestionKeys] = useState<PrefillSuggestionKey[]>([]);
+  const [migrationPreview, setMigrationPreview] = useState<LegacyHomeMigrationPreview | null>(null);
+  const [loadingMigrationPreview, setLoadingMigrationPreview] = useState(false);
+  const [applyingMigrationPreview, setApplyingMigrationPreview] = useState(false);
   const [draggedBlockId, setDraggedBlockId] = useState<string | null>(null);
   const [dropTargetBlockId, setDropTargetBlockId] = useState<string | null>(null);
 
@@ -3393,6 +3586,101 @@ export function PageEditor() {
       cancelled = true;
     };
   }, [admin?.currentSite?.id, navigate, pageKey]);
+
+  const clearMigrationQuery = () => {
+    if (!searchParams.has("migrationPreview")) {
+      return;
+    }
+
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("migrationPreview");
+    setSearchParams(nextParams, { replace: true });
+  };
+
+  const handlePreviewLegacyMigration = async () => {
+    setLoadingMigrationPreview(true);
+    try {
+      const preview = await previewLegacyHomeMigration();
+      setMigrationPreview(preview);
+      clearMigrationQuery();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to generate migration preview.");
+    } finally {
+      setLoadingMigrationPreview(false);
+    }
+  };
+
+  const handleCloseMigrationPreview = async () => {
+    const currentPreview = migrationPreview;
+    setMigrationPreview(null);
+    clearMigrationQuery();
+
+    if (!currentPreview) {
+      return;
+    }
+
+    try {
+      await cancelLegacyHomeMigration({ sourceFingerprint: currentPreview.sourceFingerprint });
+    } catch {
+      // best-effort audit event only
+    }
+  };
+
+  const handleApplyMigrationPreview = async () => {
+    if (!migrationPreview) {
+      return;
+    }
+
+    setApplyingMigrationPreview(true);
+    try {
+      const updatedPage = await applyLegacyHomeMigration({
+        sourceFingerprint: migrationPreview.sourceFingerprint,
+        proposedContent: migrationPreview.proposedContent,
+      });
+      setPage(updatedPage);
+      setSelectedBlockId(updatedPage.content.blocks[0]?.id ?? null);
+      setLastSavedAt(updatedPage.updatedAt);
+      setSaveState("saved");
+      setMigrationPreview(null);
+      clearMigrationQuery();
+      toast.success("Block-editor draft created from legacy homepage content.");
+    } catch (err) {
+      if (
+        err instanceof ApiError &&
+        err.code === "LEGACY_MIGRATION_SOURCE_CHANGED"
+      ) {
+        toast.error("Legacy homepage content changed. Regenerating the preview now.");
+        await handlePreviewLegacyMigration();
+        return;
+      }
+
+      toast.error(err instanceof Error ? err.message : "Failed to create migration draft.");
+    } finally {
+      setApplyingMigrationPreview(false);
+    }
+  };
+
+  useEffect(() => {
+    if (
+      loading ||
+      !page ||
+      page.pageKey !== "home" ||
+      page.editorResolution.migrationAvailable !== true ||
+      searchParams.get("migrationPreview") !== "1" ||
+      migrationPreview ||
+      loadingMigrationPreview
+    ) {
+      return;
+    }
+
+    void handlePreviewLegacyMigration();
+  }, [
+    loading,
+    page,
+    migrationPreview,
+    loadingMigrationPreview,
+    searchParams,
+  ]);
 
   const updateBlock = (blockId: string, nextData: BlockData) => {
     setSaveState("unsaved");
@@ -3806,7 +4094,13 @@ export function PageEditor() {
 
   return (
     <div className="min-h-screen bg-[#05070a] text-white">
-      <PageEditorCompatibilityBanner page={page} />
+      <PageEditorCompatibilityBanner
+        page={page}
+        previewingMigration={loadingMigrationPreview}
+        onPreviewMigration={() => {
+          void handlePreviewLegacyMigration();
+        }}
+      />
       <PageEditorTopBar
         page={page}
         saving={saving}
@@ -3985,6 +4279,18 @@ export function PageEditor() {
         />
       ) : null}
 
+      {migrationPreview ? (
+        <LegacyMigrationPreviewDialog
+          preview={migrationPreview}
+          applying={applyingMigrationPreview}
+          onClose={() => {
+            void handleCloseMigrationPreview();
+          }}
+          onApply={() => {
+            void handleApplyMigrationPreview();
+          }}
+        />
+      ) : null}
     </div>
   );
 }

@@ -20,6 +20,11 @@ import {
   recordPagePrefillRejected,
   uploadPagePrefillArtifacts,
 } from "../../services/adminPagePrefill";
+import {
+  applyLegacyHomeMigration,
+  cancelLegacyHomeMigration,
+  previewLegacyHomeMigration,
+} from "../../services/legacyHomeMigration";
 
 vi.mock("../../auth/useAdmin", () => ({
   useAdmin: vi.fn(),
@@ -41,6 +46,12 @@ vi.mock("../../services/adminPagePrefill", () => ({
   recordPagePrefillApplied: vi.fn(),
   recordPagePrefillRejected: vi.fn(),
   uploadPagePrefillArtifacts: vi.fn(),
+}));
+
+vi.mock("../../services/legacyHomeMigration", () => ({
+  applyLegacyHomeMigration: vi.fn(),
+  cancelLegacyHomeMigration: vi.fn(),
+  previewLegacyHomeMigration: vi.fn(),
 }));
 
 describe("PageEditor compatibility", () => {
@@ -144,6 +155,9 @@ describe("PageEditor compatibility", () => {
     vi.mocked(recordPagePrefillApplied).mockRejectedValue(new Error("not used"));
     vi.mocked(recordPagePrefillRejected).mockRejectedValue(new Error("not used"));
     vi.mocked(deletePagePrefillBrief).mockRejectedValue(new Error("not used"));
+    vi.mocked(previewLegacyHomeMigration).mockRejectedValue(new Error("not used"));
+    vi.mocked(applyLegacyHomeMigration).mockRejectedValue(new Error("not used"));
+    vi.mocked(cancelLegacyHomeMigration).mockResolvedValue(undefined);
   });
 
   it("shows the mixed-content compatibility banner and legacy-editor link", async () => {
@@ -166,5 +180,17 @@ describe("PageEditor compatibility", () => {
       "href",
       "/admin/legacy/home"
     );
+  });
+
+  it("shows the migration preview action when migration is available", async () => {
+    render(
+      <MemoryRouter initialEntries={["/admin/pages/home"]}>
+        <Routes>
+          <Route path="/admin/pages/:pageKey" element={<PageEditor />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByRole("button", { name: "Preview migration" })).toBeInTheDocument();
   });
 });
