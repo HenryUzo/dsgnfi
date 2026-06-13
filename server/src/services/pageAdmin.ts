@@ -27,18 +27,14 @@ import {
   listSiteHierarchyPages,
   toPageHierarchyPayload,
 } from "./pageHierarchy";
+import {
+  getLegacyPageCompatibilityDetails,
+  getLegacyPageCompatibilityStatus,
+  type PageCompatibilityStatus,
+  resolvePageEditorState,
+} from "./pageEditorResolution";
 import { writeAuditLog } from "./auditLog";
 import { ApiRequestError } from "./apiErrors";
-
-const HOME_COMPAT_SECTION_KEYS = [
-  "hero",
-  "services",
-  "featuredWork",
-  "faq",
-  "cta",
-  "testimonials",
-  "awards",
-] as const;
 
 function toJsonInput(value: unknown): Prisma.InputJsonValue {
   return value as Prisma.InputJsonValue;
@@ -201,6 +197,16 @@ function toPageLineagePayload(page: {
   };
 }
 
+function toCompatibilityStatus(
+  status: "DRAFT" | "PUBLISHED" | null | undefined
+): PageCompatibilityStatus {
+  if (status === "DRAFT" || status === "PUBLISHED") {
+    return status;
+  }
+
+  return "NONE";
+}
+
 async function getDefaultParentForPage(
   prisma: PrismaClient,
   siteId: string,
@@ -224,12 +230,31 @@ async function getDefaultParentForPage(
   });
 }
 
-function toAdminPagePayload(
+async function toAdminPagePayload(
+  prisma: PrismaClient,
+  siteId: string,
   page: NonNullable<Awaited<ReturnType<typeof getScopedPage>>>,
-  pageDefinition?: { allowedBlockTypes: string[]; isRequired?: boolean } | null,
+  pageDefinition?:
+    | {
+        allowedBlockTypes: string[];
+        isRequired?: boolean;
+        defaultBlocks?: unknown[];
+      }
+    | null,
   defaultParent?: { title: string; slug: string } | null
 ) {
   const isRequired = Boolean(pageDefinition?.isRequired);
+  const legacyStatus = await getLegacyPageCompatibilityStatus(prisma, {
+    siteId,
+    pageKey: page.pageKey,
+  });
+  const editorResolution = await resolvePageEditorState({
+    prisma,
+    siteId,
+    pageKey: page.pageKey,
+    page,
+    pageDefinition: pageDefinition ?? null,
+  });
 
   return {
     id: page.id,
@@ -244,80 +269,19 @@ function toAdminPagePayload(
     seoTitle: page.seoTitle,
     seoDescription: page.seoDescription,
     updatedAt: page.updatedAt,
+    modernStatus: toCompatibilityStatus(page.status),
+    legacyStatus,
     draftRevisionNumber: page.currentDraftRevision?.revisionNumber ?? null,
     publishedRevisionNumber: page.currentPublishedRevision?.revisionNumber ?? null,
     publishedAt: page.currentPublishedRevision?.publishedAt ?? null,
     allowedBlockTypes: pageDefinition?.allowedBlockTypes ?? [],
     lineage: toPageLineagePayload(page),
     hierarchy: toPageHierarchyPayload(page, defaultParent),
+    editorResolution,
     content:
       (page.currentDraftRevision?.content as { blocks?: unknown[] } | null) ?? {
         blocks: [],
       },
-  };
-}
-
-async function getLegacyHomeCompatibilityStatus(prisma: PrismaClient, siteId: string) {
-  const cmsSectionModel = (prisma as PrismaClient & {
-    cmsSection?: {
-      findMany?: (args: {
-        where: {
-          siteId: string;
-          page: string;
-          section: { in: string[] };
-        };
-        select: { section: true; status: true; publishedAt: true };
-      }) => Promise<Array<{ section: string; status: "DRAFT" | "PUBLISHED"; publishedAt: Date | null }>>;
-    };
-  }).cmsSection;
-
-  if (typeof cmsSectionModel?.findMany !== "function") {
-    return null;
-  }
-
-  const sections = await cmsSectionModel.findMany({
-    where: {
-      siteId,
-      page: "home",
-      section: { in: [...HOME_COMPAT_SECTION_KEYS] },
-    },
-    select: {
-      section: true,
-      status: true,
-      publishedAt: true,
-    },
-  });
-
-  if (sections.length === 0) {
-    return null;
-  }
-
-  const sectionsByKey = new Map(
-    sections.map((section) => [section.section, section])
-  );
-
-  const allPublished = HOME_COMPAT_SECTION_KEYS.every(
-    (sectionKey) => sectionsByKey.get(sectionKey)?.status === "PUBLISHED"
-  );
-
-  if (!allPublished) {
-    return {
-      status: "DRAFT" as const,
-      publishedAt: null,
-    };
-  }
-
-  return {
-    status: "PUBLISHED" as const,
-    publishedAt: sections.reduce<Date | null>((latest, section) => {
-      if (!section.publishedAt) {
-        return latest;
-      }
-      if (!latest || section.publishedAt.getTime() > latest.getTime()) {
-        return section.publishedAt;
-      }
-      return latest;
-    }, null),
   };
 }
 
@@ -333,13 +297,13 @@ export async function listAdminPages(prisma: PrismaClient, siteId: string) {
     where: { siteId },
     include: {
       currentDraftRevision: {
-        select: { revisionNumber: true },
+        select: { revisionNumber: true, content: true },
       },
       currentPublishedRevision: {
-        select: { revisionNumber: true, publishedAt: true },
+        select: { revisionNumber: true, publishedAt: true, content: true },
       },
       sourceTemplate: {
-        select: { key: true, name: true },
+        select: { key: true, name: true, sourceType: true },
       },
       sourceTemplateVersion: {
         select: { version: true },
@@ -347,43 +311,66 @@ export async function listAdminPages(prisma: PrismaClient, siteId: string) {
     },
     orderBy: { createdAt: "asc" },
   });
-  const legacyHomeStatus = await getLegacyHomeCompatibilityStatus(prisma, siteId);
+  const legacyHomeCompatibility = await getLegacyPageCompatibilityDetails(prisma, {
+    siteId,
+    pageKey: "home",
+  });
   const pageMap = new Map(pages.map((page) => [page.pageKey, page]));
 
-  return pages.map((page) => ({
-    ...(supportedPageMap.get(page.pageKey)
-      ? {
-          isRequired: Boolean(supportedPageMap.get(page.pageKey)?.isRequired),
-          canDelete: !supportedPageMap.get(page.pageKey)?.isRequired,
-        }
-      : {
-          isRequired: false,
-          canDelete: true,
-        }),
-    id: page.id,
-    pageKey: page.pageKey,
-    title: page.title,
-    slug: page.slug,
-    isVisible: page.isVisible,
-    status:
-      page.pageKey === "home" && legacyHomeStatus
-        ? legacyHomeStatus.status
-        : page.status,
-    seoTitle: page.seoTitle,
-    seoDescription: page.seoDescription,
-    updatedAt: page.updatedAt,
-    draftRevisionNumber: page.currentDraftRevision?.revisionNumber ?? null,
-    publishedRevisionNumber: page.currentPublishedRevision?.revisionNumber ?? null,
-    publishedAt:
-      page.pageKey === "home" && legacyHomeStatus
-        ? legacyHomeStatus.publishedAt
-        : page.currentPublishedRevision?.publishedAt ?? null,
-    lineage: toPageLineagePayload(page),
-    hierarchy: toPageHierarchyPayload(
-      page,
-      page.defaultParentPageKey ? pageMap.get(page.defaultParentPageKey) ?? null : null
-    ),
-  }));
+  return Promise.all(
+    pages.map(async (page) => {
+      const pageDefinition = supportedPageMap.get(page.pageKey) ?? null;
+      const editorResolution = await resolvePageEditorState({
+        prisma,
+        siteId,
+        pageKey: page.pageKey,
+        page,
+        pageDefinition,
+        legacyHomeSections: page.pageKey === "home" ? undefined : [],
+      });
+
+      return {
+        ...(pageDefinition
+          ? {
+              isRequired: Boolean(pageDefinition.isRequired),
+              canDelete: !pageDefinition.isRequired,
+            }
+          : {
+              isRequired: false,
+              canDelete: true,
+            }),
+        id: page.id,
+        pageKey: page.pageKey,
+        title: page.title,
+        slug: page.slug,
+        isVisible: page.isVisible,
+        status:
+          page.pageKey === "home" && legacyHomeCompatibility.status !== "NONE"
+            ? legacyHomeCompatibility.status
+            : page.status,
+        modernStatus: toCompatibilityStatus(page.status),
+        legacyStatus:
+          page.pageKey === "home"
+            ? legacyHomeCompatibility.status
+            : ("NONE" as const),
+        seoTitle: page.seoTitle,
+        seoDescription: page.seoDescription,
+        updatedAt: page.updatedAt,
+        draftRevisionNumber: page.currentDraftRevision?.revisionNumber ?? null,
+        publishedRevisionNumber: page.currentPublishedRevision?.revisionNumber ?? null,
+        publishedAt:
+          page.pageKey === "home" && legacyHomeCompatibility.status === "PUBLISHED"
+            ? legacyHomeCompatibility.publishedAt
+            : page.currentPublishedRevision?.publishedAt ?? null,
+        lineage: toPageLineagePayload(page),
+        hierarchy: toPageHierarchyPayload(
+          page,
+          page.defaultParentPageKey ? pageMap.get(page.defaultParentPageKey) ?? null : null
+        ),
+        editorResolution,
+      };
+    })
+  );
 }
 
 export async function listAdminAddablePageTemplates(
@@ -534,7 +521,9 @@ export async function createAdminPage(
 
   return {
     type: "success" as const,
-    page: toAdminPagePayload(
+    page: await toAdminPagePayload(
+      prisma,
+      options.siteId,
       createdPage,
       pageTemplate,
       await getDefaultParentForPage(prisma, options.siteId, createdPage.defaultParentPageKey)
@@ -565,6 +554,8 @@ export async function getAdminPageDraft(
   }
 
   return toAdminPagePayload(
+    prisma,
+    options.siteId,
     page,
     pageDefinition,
     await getDefaultParentForPage(prisma, options.siteId, page.defaultParentPageKey)
@@ -723,7 +714,9 @@ export async function saveAdminPageDraft(
 
   return {
     type: "success" as const,
-    page: toAdminPagePayload(
+    page: await toAdminPagePayload(
+      prisma,
+      options.siteId,
       updatedPage,
       pageDefinition,
       await getDefaultParentForPage(prisma, options.siteId, updatedPage.defaultParentPageKey)
@@ -869,7 +862,9 @@ export async function updateAdminPageMeta(
 
   return {
     type: "success" as const,
-    page: toAdminPagePayload(
+    page: await toAdminPagePayload(
+      prisma,
+      options.siteId,
       updatedPage,
       pageDefinition,
       await getDefaultParentForPage(prisma, options.siteId, updatedPage.defaultParentPageKey)
@@ -967,7 +962,9 @@ export async function renameAdminPageTitle(
 
   return {
     type: "success" as const,
-    page: toAdminPagePayload(
+    page: await toAdminPagePayload(
+      prisma,
+      options.siteId,
       updatedPage,
       pageDefinition,
       await getDefaultParentForPage(prisma, options.siteId, updatedPage.defaultParentPageKey)
@@ -1073,7 +1070,9 @@ export async function setAdminPageVisibility(
 
   return {
     type: "success" as const,
-    page: toAdminPagePayload(
+    page: await toAdminPagePayload(
+      prisma,
+      options.siteId,
       updatedPage,
       pageDefinition,
       await getDefaultParentForPage(prisma, options.siteId, updatedPage.defaultParentPageKey)
@@ -1189,7 +1188,9 @@ export async function duplicateAdminPage(
 
   return {
     type: "success" as const,
-    page: toAdminPagePayload(
+    page: await toAdminPagePayload(
+      prisma,
+      options.siteId,
       duplicatedPage,
       pageDefinition,
       await getDefaultParentForPage(prisma, options.siteId, duplicatedPage.defaultParentPageKey)
@@ -1393,7 +1394,9 @@ export async function publishAdminPage(
 
   return {
     type: "success" as const,
-    page: toAdminPagePayload(
+    page: await toAdminPagePayload(
+      prisma,
+      options.siteId,
       updatedPage,
       pageDefinition,
       await getDefaultParentForPage(prisma, options.siteId, updatedPage.defaultParentPageKey)
@@ -1529,7 +1532,9 @@ export async function restoreAdminPageRevision(
 
   return {
     type: "success" as const,
-    page: toAdminPagePayload(
+    page: await toAdminPagePayload(
+      prisma,
+      options.siteId,
       updatedPage,
       pageDefinition,
       await getDefaultParentForPage(prisma, options.siteId, updatedPage.defaultParentPageKey)

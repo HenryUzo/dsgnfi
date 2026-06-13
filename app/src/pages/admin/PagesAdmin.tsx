@@ -80,7 +80,12 @@ function slugify(value: string) {
 }
 
 function getPageEditorPath(page: AdminPageSummary) {
-  return `/admin/pages/${encodeURIComponent(page.pageKey)}`;
+  return page.editorResolution?.editorRoute ?? `/admin/pages/${encodeURIComponent(page.pageKey)}`;
+}
+
+function getPageMigrationPreviewPath(page: AdminPageSummary) {
+  const editorPath = getPageEditorPath(page);
+  return `${editorPath}${editorPath.includes("?") ? "&" : "?"}migrationPreview=1`;
 }
 
 function getPublicPagePath(page: AdminPageSummary, siteSlug?: string | null) {
@@ -142,6 +147,39 @@ function getNextStepLabel(page: AdminPageSummary) {
   if (page.status === "DRAFT" && page.publishedRevisionNumber === null) return "Complete review";
   if (page.status === "DRAFT") return "Continue editing";
   return "View site";
+}
+
+function getPrimaryEditorActionLabel(page: AdminPageSummary) {
+  return page.editorResolution?.preferredEditor === "LEGACY"
+    ? "Open legacy editor"
+    : "Open editor";
+}
+
+function PageEditorModeBadge({ page }: { page: AdminPageSummary }) {
+  if (page.editorResolution?.contentMode === "MIXED") {
+    return (
+      <span
+        className="inline-flex items-center rounded-full border border-amber-300/25 bg-amber-300/10 px-2.5 py-1 text-xs text-amber-50"
+        title="This page has both block-based and legacy section content. The block editor is the default. Legacy content remains available for compatibility."
+      >
+        Mixed content
+      </span>
+    );
+  }
+
+  if (page.editorResolution?.preferredEditor === "LEGACY") {
+    return (
+      <span className="inline-flex items-center rounded-full border border-amber-300/20 bg-amber-300/10 px-2.5 py-1 text-xs text-amber-50">
+        Legacy editor
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center rounded-full border border-sky-300/20 bg-sky-300/10 px-2.5 py-1 text-xs text-sky-100">
+      Block editor
+    </span>
+  );
 }
 
 function getBlockLabel(blockType: string) {
@@ -1525,14 +1563,18 @@ export function PagesAdmin() {
                                     </button>
                                   )}
                                   <p className="mt-1 truncate text-xs text-white/45">{page.slug}</p>
+                                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                                    <PageEditorModeBadge page={page} />
+                                    <PageTypeBadge page={page} />
+                                  </div>
                                 </div>
                               </div>
                             </td>
                             <td className="px-3 py-3">
                               <PageStatusBadge page={page} />
                             </td>
-                            <td className="px-3 py-3">
-                              <PageTypeBadge page={page} />
+                            <td className="px-3 py-3 text-sm text-white/55">
+                              {getPageTypeLabel(page)}
                             </td>
                             <td className="px-3 py-3 text-white/60">
                               <div>{formatShortDate(page.updatedAt)}</div>
@@ -1558,7 +1600,7 @@ export function PagesAdmin() {
                                   to={getPageEditorPath(page)}
                                   className="rounded-lg border border-white/10 px-3 py-2 text-sm text-white/75 hover:border-white/30 hover:text-white"
                                 >
-                                  Open editor
+                                  {getPrimaryEditorActionLabel(page)}
                                 </Link>
                                 <DropdownMenu>
                                   <DropdownMenuTrigger asChild>
@@ -1596,6 +1638,22 @@ export function PagesAdmin() {
                                       <Copy className="h-4 w-4" />
                                       Duplicate
                                     </DropdownMenuItem>
+                                    {page.editorResolution?.legacyEditorRoute ? (
+                                      <DropdownMenuItem asChild className="focus:bg-white/10 focus:text-white">
+                                        <Link to={page.editorResolution.legacyEditorRoute}>
+                                          <ExternalLink className="h-4 w-4" />
+                                          Open legacy editor
+                                        </Link>
+                                      </DropdownMenuItem>
+                                    ) : null}
+                                    {page.editorResolution?.migrationAvailable ? (
+                                      <DropdownMenuItem asChild className="focus:bg-white/10 focus:text-white">
+                                        <Link to={getPageMigrationPreviewPath(page)}>
+                                          <Lightbulb className="h-4 w-4" />
+                                          Preview migration
+                                        </Link>
+                                      </DropdownMenuItem>
+                                    ) : null}
                                     <DropdownMenuItem
                                       disabled={page.pageKey === "home"}
                                       onClick={() => void handleToggleVisibility(page)}

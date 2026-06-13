@@ -111,6 +111,26 @@ export type SiteDomain = {
   updatedAt: string;
 };
 
+export type PageCompatibilityStatus = "NONE" | "DRAFT" | "PUBLISHED";
+
+export type PageEditorResolution = {
+  hasModernPage: boolean;
+  hasModernDraft: boolean;
+  hasModernPublishedRevision: boolean;
+  hasLegacyCmsContent: boolean;
+  hasPublishedLegacyContent: boolean;
+  preferredEditor: "BLOCK" | "LEGACY";
+  editorRoute: string;
+  legacyEditorRoute: string | null;
+  contentMode: "MODERN_ONLY" | "LEGACY_ONLY" | "MIXED" | "EMPTY";
+  compatibilityReason:
+    | "MODERN_PAGE_AVAILABLE"
+    | "LEGACY_ONLY_CONTENT"
+    | "MODERN_AND_LEGACY_COEXIST"
+    | "NO_CONTENT";
+  migrationAvailable: boolean;
+};
+
 export type AdminPageSummary = {
   id: string;
   pageKey: string;
@@ -123,11 +143,14 @@ export type AdminPageSummary = {
   seoTitle: string | null;
   seoDescription: string | null;
   updatedAt: string;
+  modernStatus: PageCompatibilityStatus;
+  legacyStatus: PageCompatibilityStatus;
   draftRevisionNumber: number | null;
   publishedRevisionNumber: number | null;
   publishedAt: string | null;
   lineage: AdminPageLineage;
   hierarchy: PageHierarchy;
+  editorResolution: PageEditorResolution;
 };
 
 export type AdminPageTemplateSummary = {

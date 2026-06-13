@@ -938,6 +938,11 @@ describe("Sprint 3 page routes", () => {
     expect(response.status).toBe(200);
     expect(response.body.page.pageKey).toBe("home");
     expect(response.body.page.content.blocks[0].data.headline).toBe("Main Draft Home");
+    expect(response.body.page.editorResolution).toMatchObject({
+      preferredEditor: "BLOCK",
+      editorRoute: "/admin/pages/home",
+      contentMode: "MODERN_ONLY",
+    });
   });
 
   it("PUT /admin/pages/:pageKey/draft saves a valid draft", async () => {
@@ -1183,6 +1188,15 @@ describe("Sprint 3 page routes", () => {
     const homePage = response.body.pages.find((page: any) => page.pageKey === "home");
     expect(homePage.status).toBe("PUBLISHED");
     expect(homePage.publishedAt).toBeTruthy();
+    expect(homePage.modernStatus).toBe("PUBLISHED");
+    expect(homePage.legacyStatus).toBe("PUBLISHED");
+    expect(homePage.editorResolution).toMatchObject({
+      preferredEditor: "BLOCK",
+      editorRoute: "/admin/pages/home",
+      legacyEditorRoute: "/admin/legacy/home",
+      contentMode: "MIXED",
+      migrationAvailable: true,
+    });
   });
 
   it("GET /public/pages/:pageKey returns published content only", async () => {

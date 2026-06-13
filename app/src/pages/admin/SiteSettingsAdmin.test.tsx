@@ -41,6 +41,57 @@ vi.mock("../../services/siteSettings", () => ({
   deleteAdminAsset: vi.fn(),
 }));
 
+function makePageSummary(
+  overrides: Partial<Awaited<ReturnType<typeof listAdminPages>>[number]> = {}
+): Awaited<ReturnType<typeof listAdminPages>>[number] {
+  return {
+    id: "page-home",
+    pageKey: "home",
+    title: "Home",
+    slug: "/",
+    isVisible: true,
+    isRequired: true,
+    canDelete: false,
+    status: "PUBLISHED",
+    seoTitle: "Home",
+    seoDescription: null,
+    updatedAt: "",
+    modernStatus: "PUBLISHED",
+    legacyStatus: "NONE",
+    draftRevisionNumber: 1,
+    publishedRevisionNumber: 1,
+    publishedAt: "",
+    lineage: {
+      sourceTemplateKey: "agency-starter",
+      sourceTemplateName: "Agency Starter",
+      sourceTemplateVersion: "1.0.0",
+      sourcePageBlueprintKey: "home",
+      status: "INHERITED",
+      isTracked: true,
+    },
+    hierarchy: {
+      role: "MAIN",
+      defaultParentPageKey: null,
+      defaultParentTitle: null,
+      defaultParentSlug: null,
+    },
+    editorResolution: {
+      hasModernPage: true,
+      hasModernDraft: true,
+      hasModernPublishedRevision: true,
+      hasLegacyCmsContent: false,
+      hasPublishedLegacyContent: false,
+      preferredEditor: "BLOCK",
+      editorRoute: "/admin/pages/home",
+      legacyEditorRoute: null,
+      contentMode: "MODERN_ONLY",
+      compatibilityReason: "MODERN_PAGE_AVAILABLE",
+      migrationAvailable: false,
+    },
+    ...overrides,
+  };
+}
+
 describe("SiteSettingsAdmin", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -109,38 +160,7 @@ describe("SiteSettingsAdmin", () => {
       },
     ]);
     vi.mocked(listAdminPreviewTokens).mockResolvedValue([]);
-    vi.mocked(listAdminPages).mockResolvedValue([
-      {
-        id: "page-home",
-        pageKey: "home",
-        title: "Home",
-        slug: "/",
-        isVisible: true,
-        isRequired: true,
-        canDelete: false,
-        status: "PUBLISHED",
-        seoTitle: "Home",
-        seoDescription: null,
-        updatedAt: "",
-        draftRevisionNumber: 1,
-        publishedRevisionNumber: 1,
-        publishedAt: "",
-        lineage: {
-          sourceTemplateKey: "agency-starter",
-          sourceTemplateName: "Agency Starter",
-          sourceTemplateVersion: "1.0.0",
-          sourcePageBlueprintKey: "home",
-          status: "INHERITED",
-          isTracked: true,
-        },
-        hierarchy: {
-          role: "MAIN",
-          defaultParentPageKey: null,
-          defaultParentTitle: null,
-          defaultParentSlug: null,
-        },
-      },
-    ]);
+    vi.mocked(listAdminPages).mockResolvedValue([makePageSummary()]);
     vi.mocked(createAdminPreviewToken).mockResolvedValue({
       id: "preview-1",
       pageKey: "home",
@@ -254,51 +274,19 @@ describe("SiteSettingsAdmin", () => {
 
   it("shows the resolved slug for a linked navigation page", async () => {
     vi.mocked(listAdminPages).mockResolvedValue([
-      {
-        id: "page-home",
-        pageKey: "home",
-        title: "Home",
-        slug: "/",
-        isVisible: true,
-        isRequired: true,
-        canDelete: false,
-        status: "PUBLISHED",
-        seoTitle: "Home",
-        seoDescription: null,
-        updatedAt: "",
-        draftRevisionNumber: 1,
-        publishedRevisionNumber: 1,
-        publishedAt: "",
-        lineage: {
-          sourceTemplateKey: "agency-starter",
-          sourceTemplateName: "Agency Starter",
-          sourceTemplateVersion: "1.0.0",
-          sourcePageBlueprintKey: "home",
-          status: "INHERITED",
-          isTracked: true,
-        },
-        hierarchy: {
-          role: "MAIN",
-          defaultParentPageKey: null,
-          defaultParentTitle: null,
-          defaultParentSlug: null,
-        },
-      },
-      {
+      makePageSummary(),
+      makePageSummary({
         id: "page-studio",
         pageKey: "studio-profile",
         title: "Studio Profile",
         slug: "/studio-profile",
-        isVisible: true,
         isRequired: false,
         canDelete: true,
         status: "DRAFT",
-        seoTitle: "Studio Profile",
-        seoDescription: null,
-        updatedAt: "",
-        draftRevisionNumber: 1,
+        modernStatus: "DRAFT",
         publishedRevisionNumber: null,
         publishedAt: null,
+        seoTitle: "Studio Profile",
         lineage: {
           sourceTemplateKey: null,
           sourceTemplateName: null,
@@ -307,13 +295,20 @@ describe("SiteSettingsAdmin", () => {
           status: "UNTRACKED",
           isTracked: false,
         },
-        hierarchy: {
-          role: "MAIN",
-          defaultParentPageKey: null,
-          defaultParentTitle: null,
-          defaultParentSlug: null,
+        editorResolution: {
+          hasModernPage: true,
+          hasModernDraft: true,
+          hasModernPublishedRevision: false,
+          hasLegacyCmsContent: false,
+          hasPublishedLegacyContent: false,
+          preferredEditor: "BLOCK",
+          editorRoute: "/admin/pages/studio-profile",
+          legacyEditorRoute: null,
+          contentMode: "MODERN_ONLY",
+          compatibilityReason: "MODERN_PAGE_AVAILABLE",
+          migrationAvailable: false,
         },
-      },
+      }),
     ]);
     vi.mocked(getAdminSiteNavigation).mockResolvedValue({
       primary: [
