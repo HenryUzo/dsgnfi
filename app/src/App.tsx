@@ -293,9 +293,17 @@ function LegacyHomeEditorRoute() {
   );
 }
 
+export function shouldRedirectRootToAdmin(hostname: string, pathname: string) {
+  const normalizedHost = hostname.trim().toLowerCase();
+  return normalizedHost === 'admin.dsgnfi.com' && pathname === '/';
+}
+
 function AppRoutes() {
   const location = useLocation();
   const isAdminRoute = location.pathname.startsWith('/admin');
+  const shouldRouteRootToAdmin =
+    typeof window !== 'undefined' &&
+    shouldRedirectRootToAdmin(window.location.hostname, location.pathname);
 
   useEffect(() => {
     document.body.classList.toggle('admin-ui', isAdminRoute);
@@ -312,104 +320,108 @@ function AppRoutes() {
           <CursorFollower />
         </>
       )}
-      <Routes>
-        <Route path="/admin/login" element={<AdminLogin />} />
-        <Route
-          path="/admin"
-          element={
-            <AdminRoute title="Dashboard">
-              <AdminDashboard />
-            </AdminRoute>
-          }
-        />
-        <Route
-          path="/admin/sites"
-          element={
-            <AdminRoute title="Sites">
-              <AdminSites />
-            </AdminRoute>
-          }
-        />
-        <Route
-          path="/admin/templates"
-          element={
-            <AdminRoute title="Templates">
-              <TemplatesAdmin />
-            </AdminRoute>
-          }
-        />
-        <Route path="/template-previews/:templateKey" element={<TemplatePreviewPage />} />
-        <Route
-          path="/admin/pages"
-          element={
-            <AdminRoute title="Pages">
-              <PagesAdmin />
-            </AdminRoute>
-          }
-        />
-        <Route
-          path="/admin/pages/home"
-          element={
-            <AdminRoute title="Page Editor">
-              <PageEditor />
-            </AdminRoute>
-          }
-        />
-        <Route
-          path="/admin/legacy/home"
-          element={
-            <AdminRoute title="Legacy Home Editor">
-              <LegacyHomeEditorRoute />
-            </AdminRoute>
-          }
-        />
-        <Route
-          path="/admin/pages/home/legacy"
-          element={<Navigate replace to="/admin/legacy/home" />}
-        />
-        <Route
-          path="/admin/pages/generic/:pageKey"
-          element={
-            <AdminRoute title="Page Editor">
-              <PageEditor />
-            </AdminRoute>
-          }
-        />
-        <Route
-          path="/admin/pages/:pageKey"
-          element={
-            <AdminRoute title="Page Editor">
-              <PageEditor />
-            </AdminRoute>
-          }
-        />
-        <Route
-          path="/admin/site-settings"
-          element={
-            <AdminRoute title="Site Settings">
-              <SiteSettingsAdmin />
-            </AdminRoute>
-          }
-        />
-        <Route
-          path="/admin/work"
-          element={
-            <AdminRoute title="Work Setup">
-              <WorkAdmin />
-            </AdminRoute>
-          }
-        />
-        <Route
-          path="/admin/process"
-          element={
-            <AdminRoute title="Process Page">
-              <ProcessAdmin />
-            </AdminRoute>
-          }
-        />
-        <Route path="/preview/pages/:pageKey" element={<PreviewPage />} />
-        <Route path="/*" element={<PublicLayout />} />
-      </Routes>
+      {shouldRouteRootToAdmin ? (
+        <Navigate replace to="/admin" />
+      ) : (
+        <Routes>
+          <Route path="/admin/login" element={<AdminLogin />} />
+          <Route
+            path="/admin"
+            element={
+              <AdminRoute title="Dashboard">
+                <AdminDashboard />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/sites"
+            element={
+              <AdminRoute title="Sites">
+                <AdminSites />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/templates"
+            element={
+              <AdminRoute title="Templates">
+                <TemplatesAdmin />
+              </AdminRoute>
+            }
+          />
+          <Route path="/template-previews/:templateKey" element={<TemplatePreviewPage />} />
+          <Route
+            path="/admin/pages"
+            element={
+              <AdminRoute title="Pages">
+                <PagesAdmin />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/pages/home"
+            element={
+              <AdminRoute title="Page Editor">
+                <PageEditor />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/legacy/home"
+            element={
+              <AdminRoute title="Legacy Home Editor">
+                <LegacyHomeEditorRoute />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/pages/home/legacy"
+            element={<Navigate replace to="/admin/legacy/home" />}
+          />
+          <Route
+            path="/admin/pages/generic/:pageKey"
+            element={
+              <AdminRoute title="Page Editor">
+                <PageEditor />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/pages/:pageKey"
+            element={
+              <AdminRoute title="Page Editor">
+                <PageEditor />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/site-settings"
+            element={
+              <AdminRoute title="Site Settings">
+                <SiteSettingsAdmin />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/work"
+            element={
+              <AdminRoute title="Work Setup">
+                <WorkAdmin />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/process"
+            element={
+              <AdminRoute title="Process Page">
+                <ProcessAdmin />
+              </AdminRoute>
+            }
+          />
+          <Route path="/preview/pages/:pageKey" element={<PreviewPage />} />
+          <Route path="/*" element={<PublicLayout />} />
+        </Routes>
+      )}
     </>
   );
 }
