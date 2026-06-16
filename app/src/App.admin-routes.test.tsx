@@ -93,7 +93,7 @@ vi.mock("./pages/admin/WorkAdmin", () => ({ WorkAdmin: () => <div>Work Admin</di
 vi.mock("./pages/admin/ProcessAdmin", () => ({ ProcessAdmin: () => <div>Process Admin</div> }));
 vi.mock("./pages/admin/SiteSettingsAdmin", () => ({ SiteSettingsAdmin: () => <div>Site Settings</div> }));
 
-import App from "./App";
+import App, { shouldRedirectRootToAdmin } from "./App";
 
 describe("App admin editor routes", () => {
   beforeEach(() => {
@@ -132,5 +132,20 @@ describe("App admin editor routes", () => {
     await waitFor(() => {
       expect(window.location.pathname).toBe("/admin/legacy/home");
     });
+  });
+});
+
+describe("admin host routing", () => {
+  it("redirects the root path on admin.dsgnfi.com to the admin dashboard", () => {
+    expect(shouldRedirectRootToAdmin("admin.dsgnfi.com", "/")).toBe(true);
+  });
+
+  it("keeps the public root on the public site host", () => {
+    expect(shouldRedirectRootToAdmin("dsgnfi.com", "/")).toBe(false);
+    expect(shouldRedirectRootToAdmin("www.dsgnfi.com", "/")).toBe(false);
+  });
+
+  it("does not redirect non-root paths on the admin host", () => {
+    expect(shouldRedirectRootToAdmin("admin.dsgnfi.com", "/contact")).toBe(false);
   });
 });
