@@ -4,6 +4,7 @@ import {
   applyLegacyHomeMigrationPreview,
   generateLegacyHomeMigrationPreview,
   isLegacyMigrationSourceChangedError,
+  legacyHomeMigrationBlockValidators,
 } from "../src/services/legacyHomeMigration";
 import { getAdminPageDraft, saveAdminPageDraft } from "../src/services/pageAdmin";
 
@@ -192,6 +193,117 @@ function buildGenericPageDraft() {
   };
 }
 
+function buildBlitPageDraft() {
+  return {
+    id: "page-blit-home",
+    pageKey: "home",
+    title: "Blit Home",
+    slug: "/",
+    seoTitle: "Blit Home",
+    seoDescription: "Blit homepage",
+    updatedAt: "2026-06-10T00:00:00.000Z",
+    draftRevisionNumber: 2,
+    publishedRevisionNumber: 1,
+    allowedBlockTypes: [
+      "blitHeroCollage",
+      "blitFeaturedWork",
+      "blitEditorialStatement",
+      "blitVideoSection",
+      "blitCapabilitiesGrid",
+      "blitHorizontalGallery",
+      "blitFinalStatement",
+    ],
+    content: {
+      blocks: [
+        {
+          id: "blit-home-hero",
+          type: "blitHeroCollage",
+          data: {
+            eyebrow: "Blit",
+            headline: "Current headline",
+            caption: "Current caption",
+            images: [{ imageUrl: "/existing-hero.jpg", alt: "Existing hero" }],
+          },
+        },
+        {
+          id: "blit-home-featured",
+          type: "blitFeaturedWork",
+          data: {
+            heading: "featured work",
+            title: "Current featured",
+            ctaLabel: "See works",
+            ctaHref: "/works",
+            projects: [
+              {
+                title: "Current featured project",
+                category: "Installation",
+                year: "2026",
+                description: "Existing project",
+                image: "/featured.jpg",
+                href: "/work/current",
+                location: "Lagos",
+              },
+            ],
+          },
+        },
+        {
+          id: "blit-home-editorial",
+          type: "blitEditorialStatement",
+          data: {
+            eyebrow: "statement",
+            title: "Current editorial",
+            body: "Current editorial body",
+          },
+        },
+        {
+          id: "blit-home-video",
+          type: "blitVideoSection",
+          data: {
+            title: "Current showreel",
+            videoUrl: "/showreel.mp4",
+          },
+        },
+        {
+          id: "blit-home-capabilities",
+          type: "blitCapabilitiesGrid",
+          data: {
+            heading: "capabilities",
+            imageUrl: "/capabilities.jpg",
+            items: [
+              {
+                title: "Existing capability",
+                description: "Existing description",
+                imageUrl: "/capability.jpg",
+                imageAlt: "Capability",
+              },
+            ],
+          },
+        },
+        {
+          id: "blit-home-gallery",
+          type: "blitHorizontalGallery",
+          data: {
+            heading: "selected moments",
+            projects: [
+              {
+                title: "Existing gallery card",
+                subtitle: "Existing subtitle",
+                image: "/gallery.jpg",
+                href: "/works#existing",
+              },
+            ],
+          },
+        },
+        {
+          id: "blit-home-final",
+          type: "blitFinalStatement",
+          data: { title: "Current final statement" },
+        },
+      ],
+    },
+  };
+}
+
 describe("legacyHomeMigration", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -372,5 +484,166 @@ describe("legacyHomeMigration", () => {
 
     expect(result.type).toBe("validation_error");
     expect(saveAdminPageDraft).not.toHaveBeenCalled();
+  });
+
+  it("applies a Blit preview that carries forward video and horizontal gallery blocks", async () => {
+    vi.mocked(getAdminPageDraft).mockResolvedValue(buildBlitPageDraft() as never);
+    vi.mocked(saveAdminPageDraft).mockResolvedValue({
+      type: "success",
+      page: {
+        ...buildBlitPageDraft(),
+        updatedAt: "2026-06-12T09:00:00.000Z",
+        draftRevisionNumber: 3,
+      },
+    } as never);
+
+    const prisma = buildPrisma();
+    const previewResult = await generateLegacyHomeMigrationPreview(prisma as never, {
+      tenantId: "tenant-1",
+      siteId: "site-1",
+    });
+    expect(previewResult.type).toBe("success");
+    if (previewResult.type !== "success") {
+      return;
+    }
+
+    expect(previewResult.preview.proposedContent.blocks.map((block) => block.type)).toEqual([
+      "blitHeroCollage",
+      "blitFeaturedWork",
+      "blitEditorialStatement",
+      "blitVideoSection",
+      "blitCapabilitiesGrid",
+      "blitHorizontalGallery",
+      "blitFinalStatement",
+    ]);
+
+    const result = await applyLegacyHomeMigrationPreview(prisma as never, {
+      tenantId: "tenant-1",
+      siteId: "site-1",
+      adminId: "admin-1",
+      sourceFingerprint: previewResult.preview.sourceFingerprint,
+      proposedContent: previewResult.preview.proposedContent,
+    });
+
+    expect(result.type).toBe("success");
+    expect(saveAdminPageDraft).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(saveAdminPageDraft).mock.calls[0]?.[1]).toMatchObject({
+      pageKey: "home",
+      adminId: "admin-1",
+      payload: {
+        title: "Blit Home",
+        slug: "/",
+        content: {
+          blocks: expect.arrayContaining([
+            expect.objectContaining({
+              id: "blit-home-video",
+              type: "blitVideoSection",
+              data: { title: "Current showreel", videoUrl: "/showreel.mp4" },
+            }),
+            expect.objectContaining({
+              id: "blit-home-gallery",
+              type: "blitHorizontalGallery",
+              data: {
+                heading: "selected moments",
+                projects: [
+                  {
+                    title: "Existing gallery card",
+                    subtitle: "Existing subtitle",
+                    image: "/gallery.jpg",
+                    href: "/works#existing",
+                  },
+                ],
+              },
+            }),
+          ]),
+        },
+      },
+    });
+  });
+
+  it("rejects invalid Blit video section data", async () => {
+    vi.mocked(getAdminPageDraft).mockResolvedValue(buildBlitPageDraft() as never);
+    const prisma = buildPrisma();
+    const previewResult = await generateLegacyHomeMigrationPreview(prisma as never, {
+      tenantId: "tenant-1",
+      siteId: "site-1",
+    });
+    expect(previewResult.type).toBe("success");
+    if (previewResult.type !== "success") {
+      return;
+    }
+
+    const invalidBlocks = previewResult.preview.proposedContent.blocks.map((block) =>
+      block.type === "blitVideoSection"
+        ? {
+            ...block,
+            data: {
+              ...block.data,
+              videoUrl: ["invalid"],
+            },
+          }
+        : block
+    );
+
+    const result = await applyLegacyHomeMigrationPreview(prisma as never, {
+      tenantId: "tenant-1",
+      siteId: "site-1",
+      adminId: "admin-1",
+      sourceFingerprint: previewResult.preview.sourceFingerprint,
+      proposedContent: { blocks: invalidBlocks },
+    });
+
+    expect(result.type).toBe("validation_error");
+    expect(saveAdminPageDraft).not.toHaveBeenCalled();
+  });
+
+  it("rejects invalid Blit horizontal gallery data", async () => {
+    vi.mocked(getAdminPageDraft).mockResolvedValue(buildBlitPageDraft() as never);
+    const prisma = buildPrisma();
+    const previewResult = await generateLegacyHomeMigrationPreview(prisma as never, {
+      tenantId: "tenant-1",
+      siteId: "site-1",
+    });
+    expect(previewResult.type).toBe("success");
+    if (previewResult.type !== "success") {
+      return;
+    }
+
+    const invalidBlocks = previewResult.preview.proposedContent.blocks.map((block) =>
+      block.type === "blitHorizontalGallery"
+        ? {
+            ...block,
+            data: {
+              ...block.data,
+              projects: [
+                {
+                  title: "Broken project",
+                  subtitle: "Missing fields",
+                  image: ["/broken.jpg"],
+                  href: "/broken",
+                },
+              ],
+            },
+          }
+        : block
+    );
+
+    const result = await applyLegacyHomeMigrationPreview(prisma as never, {
+      tenantId: "tenant-1",
+      siteId: "site-1",
+      adminId: "admin-1",
+      sourceFingerprint: previewResult.preview.sourceFingerprint,
+      proposedContent: { blocks: invalidBlocks },
+    });
+
+    expect(result.type).toBe("validation_error");
+    expect(saveAdminPageDraft).not.toHaveBeenCalled();
+  });
+
+  it("covers every carried-forward Blit homepage block type with a migration validator", () => {
+    const blitAllowedBlockTypes = buildBlitPageDraft().allowedBlockTypes;
+    expect(blitAllowedBlockTypes.filter((type) => !(type in legacyHomeMigrationBlockValidators))).toEqual(
+      []
+    );
   });
 });
