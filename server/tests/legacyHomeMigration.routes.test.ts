@@ -240,12 +240,35 @@ function blitHomeContent(titlePrefix: string) {
         },
       },
       {
+        id: "blit-home-video",
+        type: "blitVideoSection",
+        data: {
+          title: `${titlePrefix} showreel`,
+          videoUrl: "/showreel.mp4",
+        },
+      },
+      {
         id: "blit-home-capabilities",
         type: "blitCapabilitiesGrid",
         data: {
           heading: "capabilities",
           imageUrl: "/capabilities.jpg",
           items: [],
+        },
+      },
+      {
+        id: "blit-home-gallery",
+        type: "blitHorizontalGallery",
+        data: {
+          heading: "selected moments",
+          projects: [
+            {
+              title: `${titlePrefix} gallery card`,
+              subtitle: `${titlePrefix} subtitle`,
+              image: "/gallery.jpg",
+              href: "/works#gallery",
+            },
+          ],
         },
       },
       {
@@ -488,7 +511,9 @@ function buildState() {
       "blitHeroCollage",
       "blitFeaturedWork",
       "blitEditorialStatement",
+      "blitVideoSection",
       "blitCapabilitiesGrid",
+      "blitHorizontalGallery",
       "blitFinalStatement",
     ],
     sourceTemplateId: blitTemplate.id,
@@ -1135,6 +1160,59 @@ describe("legacy home migration routes", () => {
     expect(response.body.error.code).toBe("legacy_migration_empty");
   });
 
+  it("apply accepts a valid Blit preview and preserves the published revision pointer", async () => {
+    const app = await createTestApp();
+    const preview = await request(app)
+      .post("/admin/pages/home/legacy-migration/preview")
+      .set("Cookie", cookieFor("admin-owner", "site-blit"));
+
+    expect(preview.status).toBe(200);
+    expect(
+      preview.body.preview.proposedContent.blocks.some((block: any) => block.type === "blitVideoSection")
+    ).toBe(true);
+    expect(
+      preview.body.preview.proposedContent.blocks.some(
+        (block: any) => block.type === "blitHorizontalGallery"
+      )
+    ).toBe(true);
+
+    const beforePage = state.pages.find((entry) => entry.id === "page-blit-home");
+    const beforePublishedPointer = beforePage?.currentPublishedRevisionId ?? null;
+    const beforeRevisionCount = state.revisions.length;
+    const publishedBefore = await request(app).get("/public/pages/home").query({ siteId: "site-blit" });
+
+    const response = await request(app)
+      .post("/admin/pages/home/legacy-migration/apply")
+      .set("Cookie", cookieFor("admin-owner", "site-blit"))
+      .send({
+        sourceFingerprint: preview.body.preview.sourceFingerprint,
+        proposedContent: preview.body.preview.proposedContent,
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.page.pageKey).toBe("home");
+    expect(response.body.page.draftRevisionNumber).toBeGreaterThan(1);
+    expect(state.revisions.length).toBe(beforeRevisionCount + 1);
+    expect(state.pages.find((entry) => entry.id === "page-blit-home")?.currentPublishedRevisionId).toBe(
+      beforePublishedPointer
+    );
+    expect(
+      response.body.page.content.blocks.some((block: any) => block.type === "blitVideoSection")
+    ).toBe(true);
+    expect(
+      response.body.page.content.blocks.some((block: any) => block.type === "blitHorizontalGallery")
+    ).toBe(true);
+
+    const publishedAfter = await request(app).get("/public/pages/home").query({ siteId: "site-blit" });
+    expect(publishedAfter.status).toBe(200);
+    expect(publishedAfter.body.page.revisionNumber).toBe(publishedBefore.body.page.revisionNumber);
+    expect(publishedAfter.body.page.content).toEqual(publishedBefore.body.page.content);
+    expect(state.auditLogs.at(-1)).toMatchObject({
+      action: "legacy_home_migration.applied",
+      siteId: "site-blit",
+    });
+  });
+
   it("apply creates a new draft revision, preserves published content, and writes audit", async () => {
     const app = await createTestApp();
     const preview = await request(app)
@@ -1254,6 +1332,36 @@ describe("legacy home migration routes", () => {
             ...preview.body.preview.proposedContent.blocks,
             { id: "bad-1", type: "unknownBlock", data: {} },
           ],
+        },
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe("legacy_migration_invalid_preview");
+  });
+
+  it("apply rejects invalid Blit preview payloads with the intended validation response", async () => {
+    const app = await createTestApp();
+    const preview = await request(app)
+      .post("/admin/pages/home/legacy-migration/preview")
+      .set("Cookie", cookieFor("admin-owner", "site-blit"));
+
+    const response = await request(app)
+      .post("/admin/pages/home/legacy-migration/apply")
+      .set("Cookie", cookieFor("admin-owner", "site-blit"))
+      .send({
+        sourceFingerprint: preview.body.preview.sourceFingerprint,
+        proposedContent: {
+          blocks: preview.body.preview.proposedContent.blocks.map((block: any) =>
+            block.type === "blitVideoSection"
+              ? {
+                  ...block,
+                  data: {
+                    ...block.data,
+                    videoUrl: ["broken"],
+                  },
+                }
+              : block
+          ),
         },
       });
 

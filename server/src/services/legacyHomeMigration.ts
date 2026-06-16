@@ -234,10 +234,46 @@ const blitEditorialBlockSchema = z.object({
   hidden: z.boolean().optional(),
 });
 
+const blitVideoSectionBlockSchema = z.object({
+  title: z.string().default(""),
+  videoUrl: z.string().default(""),
+  hidden: z.boolean().optional(),
+});
+
 const blitFinalStatementBlockSchema = z.object({
   title: z.string().default(""),
   hidden: z.boolean().optional(),
 });
+
+const blitHorizontalGalleryBlockSchema = z.object({
+  heading: z.string().default(""),
+  projects: z.array(
+    z.object({
+      title: z.string().default(""),
+      subtitle: z.string().default(""),
+      image: z.string().default(""),
+      href: z.string().default(""),
+    })
+  ),
+  hidden: z.boolean().optional(),
+});
+
+export const legacyHomeMigrationBlockValidators: Record<string, z.ZodTypeAny> = {
+  hero: genericHeroBlockSchema,
+  features: genericFeaturesBlockSchema,
+  faq: genericFaqBlockSchema,
+  cta: genericCtaBlockSchema,
+  richText: genericRichTextBlockSchema,
+  stats: genericStatsBlockSchema,
+  gallery: genericGalleryBlockSchema,
+  blitHeroCollage: blitHeroCollageBlockSchema,
+  blitCapabilitiesGrid: blitCapabilitiesBlockSchema,
+  blitFeaturedWork: blitFeaturedWorkBlockSchema,
+  blitEditorialStatement: blitEditorialBlockSchema,
+  blitVideoSection: blitVideoSectionBlockSchema,
+  blitHorizontalGallery: blitHorizontalGalleryBlockSchema,
+  blitFinalStatement: blitFinalStatementBlockSchema,
+};
 
 type LegacySectionKey =
   | "hero"
@@ -1259,21 +1295,6 @@ function validateProposedBlocks(
 ) {
   const errors: PreviewUnsupportedItem[] = [];
 
-  const blockValidators: Record<string, z.ZodTypeAny> = {
-    hero: genericHeroBlockSchema,
-    features: genericFeaturesBlockSchema,
-    faq: genericFaqBlockSchema,
-    cta: genericCtaBlockSchema,
-    richText: genericRichTextBlockSchema,
-    stats: genericStatsBlockSchema,
-    gallery: genericGalleryBlockSchema,
-    blitHeroCollage: blitHeroCollageBlockSchema,
-    blitCapabilitiesGrid: blitCapabilitiesBlockSchema,
-    blitFeaturedWork: blitFeaturedWorkBlockSchema,
-    blitEditorialStatement: blitEditorialBlockSchema,
-    blitFinalStatement: blitFinalStatementBlockSchema,
-  };
-
   for (const block of blocks) {
     if (!allowedBlockTypes.includes(block.type)) {
       errors.push({
@@ -1285,7 +1306,7 @@ function validateProposedBlocks(
       continue;
     }
 
-    const validator = blockValidators[block.type];
+    const validator = legacyHomeMigrationBlockValidators[block.type];
     if (!validator) {
       errors.push({
         sourceSectionKey: "hero",
