@@ -13,6 +13,17 @@ import {
 
 const router = Router();
 
+function buildAuthCookieOptions() {
+  const secure = env.NODE_ENV === "production";
+
+  return {
+    httpOnly: true,
+    sameSite: secure ? ("none" as const) : ("lax" as const),
+    secure,
+    path: "/",
+  };
+}
+
 router.get("/ping", (_req, res) => {
   res.json({ ok: true, route: "/auth/ping" });
 });
@@ -245,12 +256,7 @@ router.post("/login", async (req, res) => {
     siteId: tokenSiteId,
   });
 
-  res.cookie("cms_token", token, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: env.NODE_ENV === "production",
-    path: "/",
-  });
+  res.cookie("cms_token", token, buildAuthCookieOptions());
 
   return res.json({ ok: true });
 });
@@ -326,12 +332,7 @@ router.post("/switch-site", requireAdmin, async (req, res) => {
     siteId: targetSiteContext.siteId,
   });
 
-  res.cookie("cms_token", token, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: env.NODE_ENV === "production",
-    path: "/",
-  });
+  res.cookie("cms_token", token, buildAuthCookieOptions());
 
   const authPayload = await buildAuthPayload(req.admin!.id, {
     tokenTenantId: targetSiteContext.tenantId,
@@ -347,7 +348,7 @@ router.post("/switch-site", requireAdmin, async (req, res) => {
 });
 
 router.post("/logout", (_req, res) => {
-  res.clearCookie("cms_token", { path: "/" });
+  res.clearCookie("cms_token", buildAuthCookieOptions());
   return res.json({ ok: true });
 });
 
