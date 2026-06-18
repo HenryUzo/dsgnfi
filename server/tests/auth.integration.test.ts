@@ -41,6 +41,12 @@ async function createTestApp() {
   return module.createApp();
 }
 
+async function createTestAppFresh() {
+  vi.resetModules();
+  const module = await import("../src/app");
+  return module.createApp();
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
 
@@ -201,5 +207,44 @@ describe("auth integration", () => {
 
     expect(response.status).toBe(401);
     expect(response.headers["set-cookie"]).toBeUndefined();
+  });
+
+  it("uses SameSite=None and Secure for the auth cookie in production", async () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    const previousCorsOrigin = process.env.CORS_ORIGIN;
+    process.env.NODE_ENV = "production";
+    process.env.CORS_ORIGIN =
+      "https://admin.dsgnfi.com,https://www.dsgnfi.com,https://dsgnfi.com";
+
+    try {
+      const passwordHash = await bcrypt.hash("MyStrongPassword123!", 10);
+      mockPrisma.adminUser.findUnique.mockResolvedValue({
+        id: "admin-1",
+        email: "admin@dsgnfi.com",
+        passwordHash,
+      });
+
+      const app = await createTestAppFresh();
+      const response = await request(app)
+        .post("/auth/login")
+        .set("Origin", "https://admin.dsgnfi.com")
+        .send({
+          email: "admin@dsgnfi.com",
+          password: "MyStrongPassword123!",
+        });
+
+      expect(response.status).toBe(200);
+      const setCookie = response.headers["set-cookie"];
+      expect(setCookie).toBeTruthy();
+      expect(setCookie?.[0]).toContain("cms_token=");
+      expect(setCookie?.[0]).toContain("HttpOnly");
+      expect(setCookie?.[0]).toContain("Path=/");
+      expect(setCookie?.[0]).toContain("SameSite=None");
+      expect(setCookie?.[0]).toContain("Secure");
+    } finally {
+      process.env.NODE_ENV = previousNodeEnv;
+      process.env.CORS_ORIGIN = previousCorsOrigin;
+      vi.resetModules();
+    }
   });
 });
