@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  --color-background: oklch(0.15 0.02 255);
+  --color-foreground: oklch(0.98 0.01 255);
+  --color-card: oklch(0.2 0.02 255);
+  --color-card-foreground: oklch(0.98 0.01 255);
+  --color-popover: oklch(0.18 0.02 255);
+  --color-popover-foreground: oklch(0.98 0.01 255);
+  --color-primary: oklch(0.76 0.12 182);
+  --color-primary-foreground: oklch(0.16 0.02 255);
+  --color-secondary: oklch(0.28 0.02 255);
+  --color-secondary-foreground: oklch(0.98 0.01 255);
+  --color-muted: oklch(0.26 0.02 255);
+  --color-muted-foreground: oklch(0.73 0.02 255);
+  --color-accent: oklch(0.3 0.02 255);
+  --color-accent-foreground: oklch(0.98 0.01 255);
+  --color-destructive: oklch(0.63 0.21 25);
+  --color-border: oklch(0.32 0.02 255);
+  --color-input: oklch(0.28 0.02 255);
+  --color-ring: oklch(0.76 0.12 182);
+  --radius: 1rem;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+* {
+  border-color: var(--color-border);
+}
+
+html {
+  background:
+    radial-gradient(circle at top left, rgba(28, 122, 110, 0.22), transparent 28%),
+    radial-gradient(circle at top right, rgba(188, 128, 56, 0.12), transparent 24%),
+    linear-gradient(180deg, #090d17 0%, #070a12 100%);
+}
+
+body {
+  min-height: 100vh;
+  background: transparent;
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  text-rendering: optimizeLegibility;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+::selection {
+  background: rgba(41, 187, 160, 0.28);
+  color: white;
+}
