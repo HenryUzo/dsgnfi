@@ -3,6 +3,8 @@ import { WorkspaceHeader } from "@/components/shell/workspace-header";
 import { requireAuthenticatedUser } from "@/lib/auth/session";
 import { fetchCurrentAgencyMembership } from "@/lib/db/agencies";
 
+export const dynamic = "force-dynamic";
+
 export default async function WorkspaceLayout({
   children,
 }: Readonly<{
